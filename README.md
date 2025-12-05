@@ -4,7 +4,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.11.0-brightgreen.svg)](https://github.com/sezginpaksoy/localization-analyzer)
+[![Version](https://img.shields.io/badge/version-1.13.1-brightgreen.svg)](https://github.com/sezginpaksoy/localization-analyzer)
 
 ## Why localization-analyzer?
 
@@ -21,6 +21,8 @@ Unlike other tools that only handle one aspect of localization, this is an **all
 | Diff between languages | ✅ | ❌ | ✅ |
 | Validation | ✅ | ❌ | ✅ |
 | Sync languages | ✅ | ✅ | ✅ |
+| Interactive HTML dashboard | ✅ | ❌ | ❌ |
+| Built-in report server | ✅ | ❌ | ❌ |
 
 ## Features
 
@@ -40,7 +42,8 @@ Unlike other tools that only handle one aspect of localization, this is an **all
 - ✅ **Validate**: Check syntax, placeholders, duplicates
 - 📈 **Stats**: Completion percentages per language
 - 🔀 **Diff**: Compare two languages
-- 📋 **Reports**: JSON, Markdown, Console output
+- 📋 **Reports**: JSON, Markdown, Console, **Interactive HTML Dashboard**
+- 🌐 **Live Preview**: Built-in server to view reports in browser
 
 ### Developer Experience
 - ⚡ **Fast**: Multi-threaded analysis
@@ -81,7 +84,17 @@ This creates `.localization.yml` in your project root.
 localization-analyzer analyze --verbose
 ```
 
-### 3. Check Statistics
+### 3. View Interactive HTML Report
+
+```bash
+# Generate HTML report and open in browser
+localization-analyzer analyze --serve
+
+# Or just generate HTML file
+localization-analyzer analyze --html report.html
+```
+
+### 4. Check Statistics
 
 ```bash
 # View completion stats for all languages
@@ -94,7 +107,7 @@ localization-analyzer stats --missing
 localization-analyzer stats --json
 ```
 
-### 4. Add New Language with Translation
+### 5. Add New Language with Translation
 
 ```bash
 # Add Spanish with auto-translation from English
@@ -104,7 +117,7 @@ localization-analyzer lang --add es --translate
 localization-analyzer lang --add es --translate --dry-run
 ```
 
-### 5. Translate Missing Keys
+### 6. Translate Missing Keys
 
 ```bash
 # Translate missing keys from English to German
@@ -114,7 +127,7 @@ localization-analyzer translate --source en --target de
 localization-analyzer translate --source en --target de --force
 ```
 
-### 6. Sync Languages
+### 7. Sync Languages
 
 ```bash
 # Sync all languages with English (source)
@@ -124,7 +137,7 @@ localization-analyzer sync --translate
 localization-analyzer sync --lang de --translate
 ```
 
-### 7. Compare Languages
+### 8. Compare Languages
 
 ```bash
 # Diff between English and Spanish
@@ -134,7 +147,7 @@ localization-analyzer diff --source en --target es
 localization-analyzer diff --source en --target es --fail-on-missing
 ```
 
-### 8. Validate Files
+### 9. Validate Files
 
 ```bash
 # Full validation
@@ -203,6 +216,7 @@ reports:
   formats:
     - json
     - console
+    - html          # Interactive HTML dashboard
   output: ./localization_reports/
 ```
 
