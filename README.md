@@ -4,7 +4,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.10.0-brightgreen.svg)](https://github.com/sezginpaksoy/localization-analyzer)
+[![Version](https://img.shields.io/badge/version-1.10.0-brightgreen.svg)](https://github.com/sezginpak/localization-analyzer)
 
 ## Why localization-analyzer?
 
@@ -59,7 +59,7 @@ pip install localization-analyzer
 ### From Source
 
 ```bash
-git clone https://github.com/sezginpaksoy/localization-analyzer.git
+git clone https://github.com/sezginpak/localization-analyzer.git
 cd localization-analyzer
 pip install -e .
 ```
@@ -342,7 +342,7 @@ Translations are cached to avoid re-translating:
 ### Setup Development Environment
 
 ```bash
-git clone https://github.com/sezginpaksoy/localization-analyzer.git
+git clone https://github.com/sezginpak/localization-analyzer.git
 cd localization-analyzer
 
 # Create virtual environment
@@ -395,12 +395,12 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Author
 
 **Sezgin Paksoy**
-- GitHub: [@sezginpaksoy](https://github.com/sezginpaksoy)
+- GitHub: [@sezginpak](https://github.com/sezginpak)
 
 ## Support
 
-- 🐛 Issues: [GitHub Issues](https://github.com/sezginpaksoy/localization-analyzer/issues)
-- 📖 Docs: [Documentation](https://github.com/sezginpaksoy/localization-analyzer#readme)
+- 🐛 Issues: [GitHub Issues](https://github.com/sezginpak/localization-analyzer/issues)
+- 📖 Docs: [Documentation](https://github.com/sezginpak/localization-analyzer#readme)
 
 ---
 
