@@ -36,16 +36,50 @@ def find_free_port(start: int = 8000, end: int = 9000) -> int:
     raise RuntimeError(f"No free port found in range {start}-{end}")
 
 
-class QuietHandler(http.server.SimpleHTTPRequestHandler):
-    """Sessiz HTTP request handler (log basmaz)."""
+class SecureHandler(http.server.SimpleHTTPRequestHandler):
+    """
+    Güvenli HTTP request handler.
 
-    def __init__(self, *args, directory: str = None, **kwargs):
+    - Sadece belirtilen dosyaya erişim izni verir (path traversal koruması)
+    - Log mesajlarını bastırır
+    """
+
+    allowed_file: Optional[str] = None
+
+    def __init__(self, *args, directory: str = None, allowed_file: str = None, **kwargs):
         self.directory = directory
+        if allowed_file:
+            SecureHandler.allowed_file = allowed_file
         super().__init__(*args, directory=directory, **kwargs)
+
+    def do_GET(self):
+        """GET isteklerini sadece izin verilen dosya için işler."""
+        # Path traversal koruması: Sadece izin verilen dosyaya erişim
+        requested_path = self.path.lstrip('/')
+
+        # Query string varsa kaldır
+        if '?' in requested_path:
+            requested_path = requested_path.split('?')[0]
+
+        # Sadece izin verilen dosyaya erişim
+        if SecureHandler.allowed_file and requested_path != SecureHandler.allowed_file:
+            self.send_error(403, "Forbidden: Access denied")
+            return
+
+        # Path traversal kontrolü (../ saldırıları)
+        if '..' in requested_path or requested_path.startswith('/'):
+            self.send_error(403, "Forbidden: Invalid path")
+            return
+
+        super().do_GET()
 
     def log_message(self, format, *args):
         """Log mesajlarını bastırır."""
         pass
+
+
+# Backward compatibility alias
+QuietHandler = SecureHandler
 
 
 def serve_report(
@@ -77,16 +111,16 @@ def serve_report(
     if port is None:
         port = find_free_port()
 
-    # Handler oluştur
+    # Handler oluştur (sadece rapor dosyasına erişim izni ver)
     directory = str(report_path.parent)
-    handler = partial(QuietHandler, directory=directory)
+    filename = report_path.name
+    handler = partial(SecureHandler, directory=directory, allowed_file=filename)
 
     # Server oluştur
     server = socketserver.TCPServer(("", port), handler)
     server.allow_reuse_address = True
 
     # URL
-    filename = report_path.name
     url = f"http://localhost:{port}/{filename}"
 
     print(f"\n{Colors.success('✓')} Server başlatıldı: {Colors.info(url)}")
@@ -170,9 +204,10 @@ class ReportServer:
         if not self.report_path.exists():
             raise FileNotFoundError(f"Report not found: {self.report_path}")
 
-        # Handler ve server
+        # Handler ve server (sadece rapor dosyasına erişim izni ver)
         directory = str(self.report_path.parent)
-        handler = partial(QuietHandler, directory=directory)
+        filename = self.report_path.name
+        handler = partial(SecureHandler, directory=directory, allowed_file=filename)
         self._server = socketserver.TCPServer(("", self.port), handler)
         self._server.allow_reuse_address = True
 

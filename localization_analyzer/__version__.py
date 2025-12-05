@@ -1,10 +1,16 @@
 """Version information for localization-analyzer."""
 
-__version__ = "1.13.0"
+__version__ = "1.13.1"
 __author__ = "Sezgin Paksoy"
 __description__ = "Professional localization analyzer for multi-platform projects"
 
 # Changelog:
+# 1.13.1 - Security fixes and improvements
+#        - Fixed XSS vulnerability in HTML reporter (JSON injection)
+#        - Fixed path traversal vulnerability in server (SecureHandler)
+#        - Server now only allows access to the report file
+#        - Added HTMLReporter to reports/__init__.py exports
+#
 # 1.13.0 - Interactive HTML Dashboard Report
 #        - New HTMLReporter class with full-featured dashboard
 #        - Dark/Light theme support with theme toggle
