@@ -1,0 +1,6 @@
+# Core dependencies
+pyyaml>=6.0
+
+# Optional dependencies
+watchdog>=3.0  # For watch mode
+tqdm>=4.65  # For progress bars

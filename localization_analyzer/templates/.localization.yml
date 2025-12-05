@@ -1,0 +1,65 @@
+# Localization Analyzer Configuration
+# Documentation: https://github.com/yourusername/localization-analyzer#readme
+
+project:
+  name: MyProject
+  framework: swift  # swift | react | flutter | android
+
+paths:
+  # Project source directory
+  source: .
+
+  # Localization files pattern (glob)
+  # Swift: ./Resources/*.lproj/Localizable.strings
+  # React: ./src/locales/*/*.json
+  # Flutter: ./lib/l10n/*.arb
+  localization: ./Resources/*.lproj/Localizable.strings
+
+  # Directories to exclude from analysis
+  exclude:
+    - build/
+    - .build/
+    - DerivedData/
+    - Pods/
+    - Carthage/
+    - vendor/
+    - .git/
+    - node_modules/
+
+languages:
+  # Primary language (used as source for translations)
+  primary: en
+
+  # All supported languages
+  supported:
+    - en
+    - tr
+    - es
+
+# Custom patterns (optional - framework defaults are used if not specified)
+patterns:
+  # Patterns for hardcoded strings
+  hardcoded: []
+
+  # Patterns for localized strings
+  localized: []
+
+auto_fix:
+  # Enable auto-fix feature
+  enabled: false
+
+  # Minimum priority to auto-fix (0-10)
+  # 10 = critical, 8 = important, 5 = normal, 2 = low
+  min_priority: 8
+
+  # Create backup before fixing
+  backup: true
+
+reports:
+  # Output formats: json, console, markdown
+  formats:
+    - json
+    - console
+
+  # Output directory for reports
+  output: ./localization_reports/
