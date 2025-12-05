@@ -539,6 +539,46 @@ class SwiftAdapter(BaseAdapter):
             # Array literal technical values
             r'^(TL|USD|EUR|GBP)$',  # Currency codes
             r'^(blue|green|red|purple|orange|pink|gray|yellow|white|black)$',  # Color names (single words)
+
+            # Date/Time format patterns
+            r'^[dMyhHmsS/:.\-\s]+$',  # Date format strings like dd/MM/yyyy, HH:mm:ss
+            r'^(dd|MM|yyyy|HH|mm|ss|yy)$',  # Individual date components
+
+            # Punctuation and symbols only
+            r'^[\s·\-:;,./\|•→←↑↓…\(\)\[\]\{\}]+$',  # Pure symbols/punctuation
+
+            # Asset/Resource identifiers
+            r'^[a-zA-Z]+_\d+$',  # asset_001, avatar_12 patterns
+            r'^(avatar|asset|image|icon|sprite|texture|model|anim)[_\-]?\d*$',  # Asset prefixes
+            r'^\d+[xX]\d+$',  # Dimension strings like 2x3, 100x100
+
+            # 3D/Animation technical names
+            r'^(idle|walk|run|jump|attack|death|spawn|hit)[_\-]?\d*$',  # Animation names
+            r'^(mesh|bone|joint|node|layer|blend)[_\-]?\w*$',  # 3D technical terms
+            r'^[A-Z][a-z]+(?:Animation|Mesh|Texture|Material|Shader|Prefab)$',  # Asset type suffixes
+
+            # Debug/Development strings
+            r'^(DEBUG|TODO|FIXME|HACK|NOTE|XXX|MARK)[:=\s-]',  # Debug markers
+            r'^\[DEBUG\]',  # Debug prefix
+            r'^(print|log|debug|trace|dump)\s*:',  # Debug output prefixes
+
+            # AI/Backend context strings (not user-facing)
+            r'^(system|user|assistant):\s*',  # AI role markers
+            r'^(prompt|context|instruction)[:=]',  # AI-related prefixes
+            r'^\{[a-z_]+\}$',  # Template variables like {user_name}
+
+            # Technical measurement units
+            r'^\d+\s*(px|pt|em|rem|%|dp|sp|vw|vh)$',  # CSS/UI units
+            r'^\d+(\.\d+)?\s*(mb|kb|gb|ms|fps|hz)$',  # Technical units (case insensitive handled elsewhere)
+
+            # JSON/Code structure strings
+            r'^\{|\}$',  # Single braces
+            r'^\[|\]$',  # Single brackets
+            r'^<[^>]+>$',  # HTML/XML tags
+            r'^[a-zA-Z]+\(\)$',  # Function call patterns like "init()"
+
+            # Filename patterns (without path)
+            r'^\w+\.(png|jpg|jpeg|gif|svg|pdf|json|xml|plist|strings|swift|m|h)$',  # File extensions
         ]
 
     @classmethod
@@ -599,8 +639,13 @@ class SwiftAdapter(BaseAdapter):
     @classmethod
     def _get_compiled_exclusion_patterns(cls, patterns):
         """Get cached compiled exclusion patterns for performance."""
-        if cls._compiled_exclusion_patterns is None:
+        # Invalidate cache if patterns changed (using tuple for hashability)
+        patterns_tuple = tuple(patterns)
+        if cls._compiled_exclusion_patterns is None or \
+           not hasattr(cls, '_exclusion_patterns_key') or \
+           cls._exclusion_patterns_key != patterns_tuple:
             cls._compiled_exclusion_patterns = [re.compile(p) for p in patterns]
+            cls._exclusion_patterns_key = patterns_tuple
         return cls._compiled_exclusion_patterns
 
     def should_exclude_string(self, text: str) -> bool:

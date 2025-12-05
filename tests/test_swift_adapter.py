@@ -469,5 +469,117 @@ class TestCharacterMap:
         assert 'ê' in adapter.CHAR_MAP
 
 
+class TestFalsePositiveExclusions:
+    """Test cases for false-positive exclusion patterns (v1.15.0)."""
+
+    def test_excludes_date_formats(self):
+        """Should exclude date/time format strings."""
+        adapter = SwiftAdapter()
+
+        # Date format patterns
+        assert adapter.should_exclude_string('dd/MM/yyyy') is True
+        assert adapter.should_exclude_string('HH:mm:ss') is True
+        assert adapter.should_exclude_string('yyyy-MM-dd') is True
+        assert adapter.should_exclude_string('dd.MM.yyyy HH:mm') is True
+        assert adapter.should_exclude_string('MM/dd/yy') is True
+
+    def test_excludes_pure_symbols(self):
+        """Should exclude pure symbol/punctuation strings."""
+        adapter = SwiftAdapter()
+
+        # Pure symbols
+        assert adapter.should_exclude_string('·') is True
+        assert adapter.should_exclude_string('-') is True
+        assert adapter.should_exclude_string(':') is True
+        assert adapter.should_exclude_string('...') is True
+        assert adapter.should_exclude_string('→') is True
+        assert adapter.should_exclude_string(' - ') is True
+        assert adapter.should_exclude_string('•') is True
+
+    def test_excludes_asset_identifiers(self):
+        """Should exclude asset/resource identifiers."""
+        adapter = SwiftAdapter()
+
+        # Asset patterns
+        assert adapter.should_exclude_string('avatar_01') is True
+        assert adapter.should_exclude_string('icon_32') is True
+        assert adapter.should_exclude_string('texture_001') is True
+        assert adapter.should_exclude_string('100x100') is True
+        assert adapter.should_exclude_string('2x3') is True
+
+    def test_excludes_animation_names(self):
+        """Should exclude 3D/animation technical names."""
+        adapter = SwiftAdapter()
+
+        # Animation names
+        assert adapter.should_exclude_string('idle') is True
+        assert adapter.should_exclude_string('walk_01') is True
+        assert adapter.should_exclude_string('run') is True
+        assert adapter.should_exclude_string('jump') is True
+        assert adapter.should_exclude_string('attack') is True
+        assert adapter.should_exclude_string('mesh') is True
+        assert adapter.should_exclude_string('blend_tree') is True
+
+    def test_excludes_debug_markers(self):
+        """Should exclude debug/development strings."""
+        adapter = SwiftAdapter()
+
+        # Debug markers
+        assert adapter.should_exclude_string('DEBUG: test') is True
+        assert adapter.should_exclude_string('TODO: fix this') is True
+        assert adapter.should_exclude_string('FIXME: memory leak') is True
+        assert adapter.should_exclude_string('[DEBUG]') is True
+
+    def test_excludes_ai_context_strings(self):
+        """Should exclude AI/backend context strings."""
+        adapter = SwiftAdapter()
+
+        # AI role markers
+        assert adapter.should_exclude_string('system: You are') is True
+        assert adapter.should_exclude_string('user: Hello') is True
+        assert adapter.should_exclude_string('assistant: Hi') is True
+        assert adapter.should_exclude_string('prompt: Generate') is True
+
+        # Template variables
+        assert adapter.should_exclude_string('{user_name}') is True
+        assert adapter.should_exclude_string('{item_count}') is True
+
+    def test_excludes_technical_units(self):
+        """Should exclude technical measurement strings."""
+        adapter = SwiftAdapter()
+
+        # Units
+        assert adapter.should_exclude_string('16px') is True
+        assert adapter.should_exclude_string('24pt') is True
+        assert adapter.should_exclude_string('100%') is True
+
+    def test_excludes_file_names(self):
+        """Should exclude file name patterns."""
+        adapter = SwiftAdapter()
+
+        # File names
+        assert adapter.should_exclude_string('icon.png') is True
+        assert adapter.should_exclude_string('data.json') is True
+        assert adapter.should_exclude_string('config.plist') is True
+
+    def test_excludes_code_patterns(self):
+        """Should exclude code structure patterns."""
+        adapter = SwiftAdapter()
+
+        # Code patterns
+        assert adapter.should_exclude_string('init()') is True
+        assert adapter.should_exclude_string('<html>') is True
+
+    def test_still_includes_user_facing_strings(self):
+        """Should still include actual user-facing strings."""
+        adapter = SwiftAdapter()
+
+        # These should NOT be excluded
+        assert adapter.should_exclude_string('Welcome to the app') is False
+        assert adapter.should_exclude_string('Your order is ready') is False
+        assert adapter.should_exclude_string('Click here to continue') is False
+        assert adapter.should_exclude_string('Error: Something went wrong') is False
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

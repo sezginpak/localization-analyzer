@@ -1,10 +1,24 @@
 """Version information for localization-analyzer."""
 
-__version__ = "1.14.0"
+__version__ = "1.15.0"
 __author__ = "Sezgin Paksoy"
 __description__ = "Professional localization analyzer for multi-platform projects"
 
 # Changelog:
+# 1.15.0 - Reduced False Positives in Hardcoded String Detection
+#        - Date/time format patterns excluded (dd/MM/yyyy, HH:mm:ss, etc.)
+#        - Pure symbol/punctuation strings excluded (·, -, :, •, →, etc.)
+#        - Asset/resource identifiers excluded (avatar_01, icon_32, 100x100)
+#        - 3D/Animation technical names excluded (idle, walk, mesh, blend)
+#        - Debug/development strings excluded (DEBUG:, TODO:, FIXME:)
+#        - AI/backend context strings excluded (system:, user:, {user_name})
+#        - Technical measurement units excluded (16px, 24pt, 100%)
+#        - File name patterns excluded (icon.png, data.json, config.plist)
+#        - Code structure patterns excluded (init(), <html>)
+#        - Improved pattern cache invalidation (cache updates on pattern change)
+#        - Added 10 new false-positive exclusion tests
+#        - Total tests: 52 in swift_adapter
+#
 # 1.14.0 - Interactive Edit Mode in HTML Dashboard
 #        - Inline edit: Double-click on text to edit and save
 #        - Batch edit: Select multiple items and edit in modal
