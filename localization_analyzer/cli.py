@@ -151,7 +151,10 @@ def cmd_analyze(args):
             report_path=html_path,
             port=args.port,
             open_browser=not args.no_browser,
-            blocking=True
+            blocking=True,
+            editable=args.edit,
+            localization_dir=Path(config.paths.localization) if args.edit else None,
+            languages=config.languages.supported if args.edit else None
         )
 
     # Check threshold
@@ -992,6 +995,8 @@ def main():
                                help='Server port (default: auto)')
     analyze_parser.add_argument('--no-browser', action='store_true',
                                help='Do not open browser automatically')
+    analyze_parser.add_argument('--edit', action='store_true',
+                               help='Enable edit mode in HTML dashboard (with --serve)')
 
     # fix command
     fix_parser = subparsers.add_parser('fix', help='Auto-fix hardcoded strings')

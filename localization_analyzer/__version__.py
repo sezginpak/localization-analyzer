@@ -1,10 +1,21 @@
 """Version information for localization-analyzer."""
 
-__version__ = "1.13.1"
+__version__ = "1.14.0"
 __author__ = "Sezgin Paksoy"
 __description__ = "Professional localization analyzer for multi-platform projects"
 
 # Changelog:
+# 1.14.0 - Interactive Edit Mode in HTML Dashboard
+#        - Inline edit: Double-click on text to edit and save
+#        - Batch edit: Select multiple items and edit in modal
+#        - New --edit flag for analyze --serve command
+#        - Server API endpoints: POST /api/update-key, POST /api/update-keys
+#        - EditableHandler class with .strings file write support
+#        - Selection toolbar with batch actions
+#        - Toast notifications for save feedback
+#        - Edit mode badge indicator
+#        - Added 6 new server tests
+#
 # 1.13.1 - Security fixes and improvements
 #        - Fixed XSS vulnerability in HTML reporter (JSON injection)
 #        - Fixed path traversal vulnerability in server (SecureHandler)

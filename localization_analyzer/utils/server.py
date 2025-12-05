@@ -1,13 +1,16 @@
-"""Simple HTTP server for serving HTML reports."""
+"""Simple HTTP server for serving HTML reports with edit capabilities."""
 
 import http.server
 import socketserver
 import webbrowser
 import threading
 import socket
+import json
+import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable, Dict, Any
 from functools import partial
+from urllib.parse import parse_qs, urlparse
 
 from .colors import Colors
 
@@ -36,57 +39,286 @@ def find_free_port(start: int = 8000, end: int = 9000) -> int:
     raise RuntimeError(f"No free port found in range {start}-{end}")
 
 
-class SecureHandler(http.server.SimpleHTTPRequestHandler):
+class EditableHandler(http.server.SimpleHTTPRequestHandler):
     """
-    Güvenli HTTP request handler.
+    Düzenlenebilir HTML rapor handler'ı.
 
+    Özellikler:
     - Sadece belirtilen dosyaya erişim izni verir (path traversal koruması)
+    - POST /api/update-key: Tek key güncelleme
+    - POST /api/update-keys: Toplu key güncelleme
+    - GET /api/languages: Dil listesi
     - Log mesajlarını bastırır
     """
 
     allowed_file: Optional[str] = None
+    update_callback: Optional[Callable] = None
+    localization_dir: Optional[Path] = None
+    languages: list = []
+    adapter = None
 
     def __init__(self, *args, directory: str = None, allowed_file: str = None, **kwargs):
         self.directory = directory
         if allowed_file:
-            SecureHandler.allowed_file = allowed_file
+            EditableHandler.allowed_file = allowed_file
         super().__init__(*args, directory=directory, **kwargs)
 
     def do_GET(self):
-        """GET isteklerini sadece izin verilen dosya için işler."""
-        # Path traversal koruması: Sadece izin verilen dosyaya erişim
-        requested_path = self.path.lstrip('/')
+        """GET isteklerini işler."""
+        parsed = urlparse(self.path)
+        path = parsed.path.lstrip('/')
+
+        # API endpoint'leri
+        if path == 'api/languages':
+            self._handle_get_languages()
+            return
 
         # Query string varsa kaldır
-        if '?' in requested_path:
-            requested_path = requested_path.split('?')[0]
+        if '?' in path:
+            path = path.split('?')[0]
 
         # Sadece izin verilen dosyaya erişim
-        if SecureHandler.allowed_file and requested_path != SecureHandler.allowed_file:
+        if EditableHandler.allowed_file and path != EditableHandler.allowed_file:
             self.send_error(403, "Forbidden: Access denied")
             return
 
         # Path traversal kontrolü (../ saldırıları)
-        if '..' in requested_path or requested_path.startswith('/'):
+        if '..' in path or path.startswith('/'):
             self.send_error(403, "Forbidden: Invalid path")
             return
 
         super().do_GET()
+
+    def do_POST(self):
+        """POST isteklerini işler."""
+        parsed = urlparse(self.path)
+        path = parsed.path.lstrip('/')
+
+        if path == 'api/update-key':
+            self._handle_update_key()
+        elif path == 'api/update-keys':
+            self._handle_update_keys()
+        else:
+            self.send_error(404, "Not Found")
+
+    def do_OPTIONS(self):
+        """CORS preflight için OPTIONS handler."""
+        self.send_response(200)
+        self._send_cors_headers()
+        self.end_headers()
+
+    def _send_cors_headers(self):
+        """CORS header'larını ekler."""
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+
+    def _send_json_response(self, data: dict, status: int = 200):
+        """JSON yanıtı gönderir."""
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(json.dumps(data, ensure_ascii=False).encode('utf-8'))
+
+    def _handle_get_languages(self):
+        """Dil listesini döndürür."""
+        self._send_json_response({
+            'success': True,
+            'languages': EditableHandler.languages
+        })
+
+    def _handle_update_key(self):
+        """Tek bir key'i günceller."""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            data = json.loads(body)
+
+            key = data.get('key')
+            translations = data.get('translations', {})
+            module = data.get('module', 'Localizable')
+
+            if not key or not translations:
+                self._send_json_response({
+                    'success': False,
+                    'error': 'Key ve translations gerekli'
+                }, 400)
+                return
+
+            # Callback ile güncelle
+            if EditableHandler.update_callback:
+                result = EditableHandler.update_callback(
+                    key=key,
+                    translations=translations,
+                    module=module
+                )
+                self._send_json_response(result)
+            else:
+                # Doğrudan dosyaya yaz
+                result = self._write_to_strings_files(key, translations, module)
+                self._send_json_response(result)
+
+        except json.JSONDecodeError:
+            self._send_json_response({
+                'success': False,
+                'error': 'Geçersiz JSON'
+            }, 400)
+        except Exception as e:
+            self._send_json_response({
+                'success': False,
+                'error': str(e)
+            }, 500)
+
+    def _handle_update_keys(self):
+        """Birden fazla key'i toplu günceller."""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            data = json.loads(body)
+
+            updates = data.get('updates', [])
+            if not updates:
+                self._send_json_response({
+                    'success': False,
+                    'error': 'Updates listesi gerekli'
+                }, 400)
+                return
+
+            results = []
+            for update in updates:
+                key = update.get('key')
+                translations = update.get('translations', {})
+                module = update.get('module', 'Localizable')
+
+                if key and translations:
+                    if EditableHandler.update_callback:
+                        result = EditableHandler.update_callback(
+                            key=key,
+                            translations=translations,
+                            module=module
+                        )
+                    else:
+                        result = self._write_to_strings_files(key, translations, module)
+                    results.append({
+                        'key': key,
+                        'success': result.get('success', False),
+                        'error': result.get('error')
+                    })
+
+            success_count = sum(1 for r in results if r['success'])
+            self._send_json_response({
+                'success': True,
+                'total': len(results),
+                'success_count': success_count,
+                'failed_count': len(results) - success_count,
+                'results': results
+            })
+
+        except json.JSONDecodeError:
+            self._send_json_response({
+                'success': False,
+                'error': 'Geçersiz JSON'
+            }, 400)
+        except Exception as e:
+            self._send_json_response({
+                'success': False,
+                'error': str(e)
+            }, 500)
+
+    def _write_to_strings_files(
+        self,
+        key: str,
+        translations: Dict[str, str],
+        module: str = 'Localizable'
+    ) -> Dict[str, Any]:
+        """
+        Key'i .strings dosyalarına yazar.
+
+        Args:
+            key: Localization key
+            translations: {lang_code: value} dict
+            module: .strings dosya adı (uzantısız)
+
+        Returns:
+            İşlem sonucu dict
+        """
+        if not EditableHandler.localization_dir:
+            return {'success': False, 'error': 'Localization dizini ayarlanmamış'}
+
+        loc_dir = EditableHandler.localization_dir
+        updated_langs = []
+        errors = []
+
+        for lang, value in translations.items():
+            # Dil dizinini bul
+            lang_dir = loc_dir / f"{lang}.lproj"
+            if not lang_dir.exists():
+                errors.append(f"{lang}: Dil dizini bulunamadı")
+                continue
+
+            # .strings dosyasını bul
+            strings_file = lang_dir / f"{module}.strings"
+            if not strings_file.exists():
+                # Dosya yoksa oluştur
+                strings_file.touch()
+
+            try:
+                # Dosyayı oku
+                content = strings_file.read_text(encoding='utf-8')
+
+                # Key zaten var mı kontrol et
+                # Pattern: "key" = "value";
+                pattern = rf'^"{re.escape(key)}"\s*=\s*"[^"]*";\s*$'
+                if re.search(pattern, content, re.MULTILINE):
+                    # Key'i güncelle
+                    escaped_value = value.replace('\\', '\\\\').replace('"', '\\"')
+                    new_line = f'"{key}" = "{escaped_value}";'
+                    content = re.sub(pattern, new_line, content, flags=re.MULTILINE)
+                else:
+                    # Yeni key ekle
+                    escaped_value = value.replace('\\', '\\\\').replace('"', '\\"')
+                    new_line = f'"{key}" = "{escaped_value}";\n'
+                    content = content.rstrip() + '\n' + new_line
+
+                # Dosyaya yaz
+                strings_file.write_text(content, encoding='utf-8')
+                updated_langs.append(lang)
+
+            except Exception as e:
+                errors.append(f"{lang}: {str(e)}")
+
+        if updated_langs:
+            return {
+                'success': True,
+                'updated_languages': updated_langs,
+                'errors': errors if errors else None
+            }
+        else:
+            return {
+                'success': False,
+                'error': 'Hiçbir dil güncellenemedi',
+                'details': errors
+            }
 
     def log_message(self, format, *args):
         """Log mesajlarını bastırır."""
         pass
 
 
-# Backward compatibility alias
-QuietHandler = SecureHandler
+# Backward compatibility aliases
+SecureHandler = EditableHandler
+QuietHandler = EditableHandler
 
 
 def serve_report(
     report_path: Path,
     port: Optional[int] = None,
     open_browser: bool = True,
-    blocking: bool = True
+    blocking: bool = True,
+    editable: bool = False,
+    localization_dir: Optional[Path] = None,
+    languages: Optional[list] = None
 ) -> Optional[socketserver.TCPServer]:
     """
     HTML raporu local server ile serve eder.
@@ -96,6 +328,9 @@ def serve_report(
         port: Port numarası (None ise otomatik bulunur)
         open_browser: Tarayıcıda otomatik aç
         blocking: True ise server'ı durdurana kadar bekle
+        editable: True ise düzenleme API'leri aktif olur
+        localization_dir: Localization dosyalarının bulunduğu dizin
+        languages: Desteklenen dil listesi
 
     Returns:
         Blocking=False ise server nesnesi, aksi halde None
@@ -111,10 +346,16 @@ def serve_report(
     if port is None:
         port = find_free_port()
 
-    # Handler oluştur (sadece rapor dosyasına erişim izni ver)
+    # Handler ayarları
     directory = str(report_path.parent)
     filename = report_path.name
-    handler = partial(SecureHandler, directory=directory, allowed_file=filename)
+
+    # Editable mod için ayarlar
+    if editable and localization_dir:
+        EditableHandler.localization_dir = Path(localization_dir)
+        EditableHandler.languages = languages or []
+
+    handler = partial(EditableHandler, directory=directory, allowed_file=filename)
 
     # Server oluştur
     server = socketserver.TCPServer(("", port), handler)
@@ -124,6 +365,8 @@ def serve_report(
     url = f"http://localhost:{port}/{filename}"
 
     print(f"\n{Colors.success('✓')} Server başlatıldı: {Colors.info(url)}")
+    if editable:
+        print(f"{Colors.info('✏️')} Düzenleme modu aktif")
 
     # Tarayıcı aç
     if open_browser:
@@ -159,13 +402,24 @@ class ReportServer:
         with ReportServer(report_path) as server:
             # Server çalışıyor
             input("Enter'a basın...")
+
+    Düzenleme modlu kullanım:
+        server = ReportServer(
+            report_path,
+            editable=True,
+            localization_dir=Path('./Resources'),
+            languages=['en', 'tr', 'de']
+        )
     """
 
     def __init__(
         self,
         report_path: Path,
         port: Optional[int] = None,
-        open_browser: bool = True
+        open_browser: bool = True,
+        editable: bool = False,
+        localization_dir: Optional[Path] = None,
+        languages: Optional[list] = None
     ):
         """
         Server'ı başlatır.
@@ -174,10 +428,16 @@ class ReportServer:
             report_path: HTML dosyasının yolu
             port: Port numarası (None ise otomatik)
             open_browser: Tarayıcıda otomatik aç
+            editable: Düzenleme modu aktif mi
+            localization_dir: Localization dosyalarının bulunduğu dizin
+            languages: Desteklenen dil listesi
         """
         self.report_path = Path(report_path)
         self.port = port or find_free_port()
         self.open_browser = open_browser
+        self.editable = editable
+        self.localization_dir = Path(localization_dir) if localization_dir else None
+        self.languages = languages or []
         self._server: Optional[socketserver.TCPServer] = None
         self._thread: Optional[threading.Thread] = None
 
@@ -204,10 +464,16 @@ class ReportServer:
         if not self.report_path.exists():
             raise FileNotFoundError(f"Report not found: {self.report_path}")
 
-        # Handler ve server (sadece rapor dosyasına erişim izni ver)
+        # Handler ve server
         directory = str(self.report_path.parent)
         filename = self.report_path.name
-        handler = partial(SecureHandler, directory=directory, allowed_file=filename)
+
+        # Editable mod için ayarlar
+        if self.editable and self.localization_dir:
+            EditableHandler.localization_dir = self.localization_dir
+            EditableHandler.languages = self.languages
+
+        handler = partial(EditableHandler, directory=directory, allowed_file=filename)
         self._server = socketserver.TCPServer(("", self.port), handler)
         self._server.allow_reuse_address = True
 
@@ -216,6 +482,8 @@ class ReportServer:
         self._thread.start()
 
         print(f"\n{Colors.success('✓')} Server başlatıldı: {Colors.info(self.url)}")
+        if self.editable:
+            print(f"{Colors.info('✏️')} Düzenleme modu aktif")
 
         # Tarayıcı aç
         if self.open_browser:

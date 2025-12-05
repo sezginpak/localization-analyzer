@@ -13,6 +13,7 @@ from localization_analyzer.utils.server import (
     serve_report,
     ReportServer,
     QuietHandler,
+    EditableHandler,
 )
 
 
@@ -297,6 +298,133 @@ class TestServeReport:
                 server.shutdown()
         finally:
             path.unlink()
+
+
+class TestEditableHandler:
+    """Test cases for EditableHandler class."""
+
+    def test_class_attributes(self):
+        """Should have class attributes for editable mode."""
+        assert hasattr(EditableHandler, 'allowed_file')
+        assert hasattr(EditableHandler, 'update_callback')
+        assert hasattr(EditableHandler, 'localization_dir')
+        assert hasattr(EditableHandler, 'languages')
+
+    def test_write_to_strings_files_no_dir(self):
+        """Should return error when localization_dir is not set."""
+        handler = MagicMock(spec=EditableHandler)
+        handler._write_to_strings_files = EditableHandler._write_to_strings_files.__get__(handler, EditableHandler)
+
+        # Ensure localization_dir is None
+        EditableHandler.localization_dir = None
+
+        result = handler._write_to_strings_files('test.key', {'en': 'Test'})
+        assert result['success'] is False
+        assert 'Localization dizini' in result['error']
+
+    def test_write_to_strings_files_creates_new_key(self):
+        """Should create new key in strings file."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            loc_dir = Path(tmp_dir)
+            en_dir = loc_dir / 'en.lproj'
+            en_dir.mkdir()
+
+            strings_file = en_dir / 'Localizable.strings'
+            strings_file.write_text('"existing.key" = "Existing";\n', encoding='utf-8')
+
+            # Set up handler
+            EditableHandler.localization_dir = loc_dir
+
+            handler = MagicMock(spec=EditableHandler)
+            handler._write_to_strings_files = EditableHandler._write_to_strings_files.__get__(handler, EditableHandler)
+
+            result = handler._write_to_strings_files('new.key', {'en': 'New Value'}, 'Localizable')
+
+            assert result['success'] is True
+            assert 'en' in result['updated_languages']
+
+            # Verify file content
+            content = strings_file.read_text(encoding='utf-8')
+            assert '"new.key" = "New Value";' in content
+            assert '"existing.key" = "Existing";' in content
+
+    def test_write_to_strings_files_updates_existing_key(self):
+        """Should update existing key in strings file."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            loc_dir = Path(tmp_dir)
+            en_dir = loc_dir / 'en.lproj'
+            en_dir.mkdir()
+
+            strings_file = en_dir / 'Localizable.strings'
+            strings_file.write_text('"test.key" = "Old Value";\n', encoding='utf-8')
+
+            EditableHandler.localization_dir = loc_dir
+
+            handler = MagicMock(spec=EditableHandler)
+            handler._write_to_strings_files = EditableHandler._write_to_strings_files.__get__(handler, EditableHandler)
+
+            result = handler._write_to_strings_files('test.key', {'en': 'New Value'}, 'Localizable')
+
+            assert result['success'] is True
+
+            content = strings_file.read_text(encoding='utf-8')
+            assert '"test.key" = "New Value";' in content
+            assert 'Old Value' not in content
+
+
+class TestReportServerEditable:
+    """Test cases for ReportServer with editable mode."""
+
+    def test_init_editable_mode(self):
+        """Should initialize with editable mode parameters."""
+        with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
+            f.write(b"<html></html>")
+            path = Path(f.name)
+
+        try:
+            server = ReportServer(
+                path,
+                editable=True,
+                localization_dir=Path('/some/path'),
+                languages=['en', 'tr', 'de']
+            )
+            assert server.editable is True
+            assert server.localization_dir == Path('/some/path')
+            assert server.languages == ['en', 'tr', 'de']
+        finally:
+            path.unlink()
+
+
+class TestServeReportEditable:
+    """Test cases for serve_report with editable mode."""
+
+    def test_editable_mode_sets_handler_attributes(self):
+        """Should set EditableHandler attributes in editable mode."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            loc_dir = Path(tmp_dir)
+            en_dir = loc_dir / 'en.lproj'
+            en_dir.mkdir()
+
+            html_file = Path(tmp_dir) / 'report.html'
+            html_file.write_text('<html></html>')
+
+            try:
+                with patch('webbrowser.open'):
+                    server = serve_report(
+                        html_file,
+                        blocking=False,
+                        open_browser=False,
+                        editable=True,
+                        localization_dir=loc_dir,
+                        languages=['en', 'tr']
+                    )
+
+                    assert EditableHandler.localization_dir == loc_dir
+                    assert EditableHandler.languages == ['en', 'tr']
+
+                    server.shutdown()
+            finally:
+                pass
 
 
 class TestServerIntegration:

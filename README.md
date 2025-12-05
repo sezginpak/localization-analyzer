@@ -4,7 +4,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.13.1-brightgreen.svg)](https://github.com/sezginpaksoy/localization-analyzer)
+[![Version](https://img.shields.io/badge/version-1.14.0-brightgreen.svg)](https://github.com/sezginpaksoy/localization-analyzer)
 
 ## Why localization-analyzer?
 
@@ -90,9 +90,18 @@ localization-analyzer analyze --verbose
 # Generate HTML report and open in browser
 localization-analyzer analyze --serve
 
+# Enable edit mode (inline editing + batch editing)
+localization-analyzer analyze --serve --edit
+
 # Or just generate HTML file
 localization-analyzer analyze --html report.html
 ```
+
+**Edit Mode Features:**
+- 🖊️ **Inline Edit**: Double-click any text to edit and save directly
+- ☑️ **Selection**: Check items to select for batch operations
+- 📝 **Batch Edit**: Edit multiple translations at once in a modal
+- 💾 **Auto-Save**: Changes are saved directly to .strings files
 
 ### 4. Check Statistics
 

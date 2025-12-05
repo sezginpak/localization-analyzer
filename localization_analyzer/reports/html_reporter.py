@@ -154,6 +154,7 @@ class HTMLReporter:
             <div class="header-content">
                 <h1>📊 {html.escape(title)}</h1>
                 <div class="header-actions">
+                    <span class="edit-mode-badge" id="editModeBadge">✏️ Düzenleme Modu</span>
                     <button id="themeToggle" class="btn btn-icon" title="Tema değiştir">🌙</button>
                     <button id="exportJSON" class="btn btn-secondary">📥 JSON</button>
                 </div>
@@ -245,6 +246,7 @@ class HTMLReporter:
                     <table class="data-table" id="hardcodedTable">
                         <thead>
                             <tr>
+                                <th><input type="checkbox" class="select-all-checkbox" id="selectAllHardcoded" onchange="toggleSelectAll('hardcoded', this.checked)"></th>
                                 <th>P</th>
                                 <th>Dosya</th>
                                 <th>Satır</th>
@@ -274,6 +276,7 @@ class HTMLReporter:
                     <table class="data-table" id="missingTable">
                         <thead>
                             <tr>
+                                <th><input type="checkbox" class="select-all-checkbox" id="selectAllMissing" onchange="toggleSelectAll('missing', this.checked)"></th>
                                 <th>Key</th>
                                 <th>Modül</th>
                                 <th>Kullanıldığı Dosyalar</th>
@@ -348,9 +351,39 @@ class HTMLReporter:
         </footer>
     </div>
 
+    <!-- Selection Toolbar -->
+    <div class="selection-toolbar" id="selectionToolbar">
+        <span class="selection-count"><span id="selectedCount">0</span> öğe seçildi</span>
+        <button class="btn btn-primary" onclick="openBatchEdit()">✏️ Toplu Düzenle</button>
+        <button class="btn btn-secondary" onclick="clearSelection()">✖ Temizle</button>
+    </div>
+
+    <!-- Batch Edit Modal -->
+    <div class="modal-overlay" id="batchEditModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>✏️ Toplu Düzenleme</h2>
+                <button class="modal-close" onclick="closeBatchEdit()">&times;</button>
+            </div>
+            <div class="modal-body" id="batchEditBody">
+                <!-- Edit items will be rendered here -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeBatchEdit()">İptal</button>
+                <button class="btn btn-primary" onclick="saveBatchEdit()">💾 Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <script>
         // Rapor verileri
         const reportData = {json_data};
+
+        // Edit mode flag - server tarafından kontrol edilir
+        const editMode = window.location.search.includes('edit=true') || true;
 
         {HTMLReporter._get_javascript()}
     </script>
@@ -772,19 +805,305 @@ class HTMLReporter:
                 align-items: flex-start;
             }
         }
+
+        /* Inline Edit Styles */
+        .editable-cell {
+            cursor: pointer;
+            position: relative;
+        }
+
+        .editable-cell:hover {
+            background: var(--bg-secondary);
+        }
+
+        .editable-cell.editing {
+            padding: 0;
+        }
+
+        .editable-cell input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--primary);
+            border-radius: 4px;
+            font-size: inherit;
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .edit-icon {
+            opacity: 0;
+            margin-left: 8px;
+            font-size: 12px;
+            transition: opacity 0.2s;
+        }
+
+        .editable-cell:hover .edit-icon {
+            opacity: 0.6;
+        }
+
+        /* Checkbox Selection */
+        .select-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--primary);
+        }
+
+        .select-all-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--primary);
+        }
+
+        /* Selection Toolbar */
+        .selection-toolbar {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-card);
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+            z-index: 1000;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .selection-toolbar.visible {
+            display: flex;
+        }
+
+        .selection-count {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--error);
+            color: white;
+        }
+
+        /* Batch Edit Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 20px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .modal-body {
+            padding: 24px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        /* Edit Form */
+        .edit-item {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .edit-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .edit-item-key {
+            font-family: monospace;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .edit-item-remove {
+            background: none;
+            border: none;
+            color: var(--error);
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .edit-translations {
+            display: grid;
+            gap: 12px;
+        }
+
+        .translation-row {
+            display: grid;
+            grid-template-columns: 60px 1fr;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .translation-lang {
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .translation-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .translation-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .toast {
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast-success { background: var(--success); }
+        .toast-error { background: var(--error); }
+        .toast-info { background: var(--info); }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Edit Mode Indicator */
+        .edit-mode-badge {
+            display: none;
+            background: var(--success);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .edit-mode-badge.visible {
+            display: inline-block;
+        }
         '''
 
     @staticmethod
     def _get_javascript() -> str:
         """JavaScript kodunu döndürür."""
         return '''
+        // Seçili öğeler
+        const selectedItems = {
+            hardcoded: new Map(),  // key -> item data
+            missing: new Map()     // key -> item data
+        };
+
+        // Dil listesi (server'dan alınacak)
+        let availableLanguages = Object.keys(reportData.languages);
+
         // Sayfa yüklendiğinde başlat
         document.addEventListener('DOMContentLoaded', function() {
             initDashboard();
             initTheme();
             initFilters();
             initExport();
+            initEditMode();
         });
+
+        // Edit Mode başlat
+        function initEditMode() {
+            if (editMode) {
+                document.getElementById('editModeBadge').classList.add('visible');
+                // Server'dan dil listesini al
+                fetchLanguages();
+            }
+        }
+
+        // Dilleri al
+        async function fetchLanguages() {
+            try {
+                const response = await fetch('/api/languages');
+                const data = await response.json();
+                if (data.success && data.languages.length > 0) {
+                    availableLanguages = data.languages;
+                }
+            } catch (e) {
+                // Rapordaki dillerden al
+                availableLanguages = Object.keys(reportData.languages);
+            }
+        }
 
         function initDashboard() {
             // Metadata
@@ -875,16 +1194,31 @@ class HTMLReporter:
             const start = (hardcodedPage - 1) * hardcodedPerPage;
             const pageData = data.slice(start, start + hardcodedPerPage);
 
-            tbody.innerHTML = pageData.map(item => {
+            tbody.innerHTML = pageData.map((item, idx) => {
                 const priorityClass = item.priority >= 9 ? 'priority-9' :
                                      item.priority >= 8 ? 'priority-8' :
                                      item.priority >= 7 ? 'priority-7' : '';
+                const itemKey = `${item.suggested_key}_${item.file}_${item.line}`;
+                const isSelected = selectedItems.hardcoded.has(itemKey);
                 return `
                     <tr>
+                        <td>
+                            <input type="checkbox" class="select-checkbox"
+                                   data-type="hardcoded"
+                                   data-key="${escapeHtml(itemKey)}"
+                                   data-text="${escapeHtml(item.text)}"
+                                   data-suggested-key="${escapeHtml(item.suggested_key)}"
+                                   ${isSelected ? 'checked' : ''}
+                                   onchange="toggleItemSelection(this)">
+                        </td>
                         <td class="${priorityClass}">P${item.priority}</td>
                         <td class="file-cell">${escapeHtml(item.file)}</td>
                         <td>${item.line}</td>
-                        <td class="text-cell" title="${escapeHtml(item.text)}">${escapeHtml(item.text.substring(0, 50))}${item.text.length > 50 ? '...' : ''}</td>
+                        <td class="text-cell editable-cell" title="${escapeHtml(item.text)}"
+                            ondblclick="startInlineEdit(this, 'hardcoded', '${escapeHtml(item.suggested_key)}', '${escapeHtml(item.text)}')">
+                            ${escapeHtml(item.text.substring(0, 50))}${item.text.length > 50 ? '...' : ''}
+                            <span class="edit-icon">✏️</span>
+                        </td>
                         <td class="key-cell">${escapeHtml(item.suggested_key)}</td>
                     </tr>
                 `;
@@ -907,13 +1241,27 @@ class HTMLReporter:
                 entries = entries.filter(([key]) => key.toLowerCase().includes(lowerFilter));
             }
 
-            tbody.innerHTML = entries.map(([key, data]) => `
+            tbody.innerHTML = entries.map(([key, data]) => {
+                const isSelected = selectedItems.missing.has(key);
+                return `
                 <tr>
-                    <td class="key-cell">${escapeHtml(key)}</td>
+                    <td>
+                        <input type="checkbox" class="select-checkbox"
+                               data-type="missing"
+                               data-key="${escapeHtml(key)}"
+                               data-module="${escapeHtml(data.module)}"
+                               ${isSelected ? 'checked' : ''}
+                               onchange="toggleItemSelection(this)">
+                    </td>
+                    <td class="key-cell editable-cell"
+                        ondblclick="startInlineEdit(this, 'missing', '${escapeHtml(key)}', '')">
+                        ${escapeHtml(key)}
+                        <span class="edit-icon">✏️</span>
+                    </td>
                     <td>${escapeHtml(data.module)}</td>
                     <td class="file-cell">${data.files.slice(0, 3).map(f => escapeHtml(f)).join(', ')}${data.files.length > 3 ? ` +${data.files.length - 3} more` : ''}</td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
 
         // Dead Keys
@@ -1055,5 +1403,262 @@ class HTMLReporter:
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // ========== SELECTION FUNCTIONS ==========
+
+        function toggleItemSelection(checkbox) {
+            const type = checkbox.dataset.type;
+            const key = checkbox.dataset.key;
+
+            if (checkbox.checked) {
+                const itemData = {
+                    key: key,
+                    text: checkbox.dataset.text || '',
+                    suggestedKey: checkbox.dataset.suggestedKey || key,
+                    module: checkbox.dataset.module || 'Localizable'
+                };
+                selectedItems[type].set(key, itemData);
+            } else {
+                selectedItems[type].delete(key);
+            }
+
+            updateSelectionToolbar();
+        }
+
+        function toggleSelectAll(type, checked) {
+            const checkboxes = document.querySelectorAll(`input[data-type="${type}"]`);
+            checkboxes.forEach(cb => {
+                cb.checked = checked;
+                toggleItemSelection(cb);
+            });
+        }
+
+        function updateSelectionToolbar() {
+            const totalSelected = selectedItems.hardcoded.size + selectedItems.missing.size;
+            const toolbar = document.getElementById('selectionToolbar');
+            const countSpan = document.getElementById('selectedCount');
+
+            countSpan.textContent = totalSelected;
+
+            if (totalSelected > 0) {
+                toolbar.classList.add('visible');
+            } else {
+                toolbar.classList.remove('visible');
+            }
+        }
+
+        function clearSelection() {
+            selectedItems.hardcoded.clear();
+            selectedItems.missing.clear();
+
+            document.querySelectorAll('.select-checkbox').forEach(cb => {
+                cb.checked = false;
+            });
+            document.querySelectorAll('.select-all-checkbox').forEach(cb => {
+                cb.checked = false;
+            });
+
+            updateSelectionToolbar();
+        }
+
+        // ========== INLINE EDIT FUNCTIONS ==========
+
+        function startInlineEdit(cell, type, key, currentText) {
+            if (!editMode) return;
+
+            const originalContent = cell.innerHTML;
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentText || key;
+            input.className = 'inline-edit-input';
+
+            cell.classList.add('editing');
+            cell.innerHTML = '';
+            cell.appendChild(input);
+            input.focus();
+            input.select();
+
+            // Enter ile kaydet, Escape ile iptal
+            input.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter') {
+                    const newValue = input.value.trim();
+                    if (newValue && newValue !== currentText) {
+                        // Key için çeviri ekle
+                        const success = await saveInlineEdit(key, newValue, type);
+                        if (success) {
+                            cell.classList.remove('editing');
+                            cell.innerHTML = `${escapeHtml(newValue.substring(0, 50))}${newValue.length > 50 ? '...' : ''}<span class="edit-icon">✏️</span>`;
+                            showToast('Kaydedildi!', 'success');
+                        } else {
+                            cell.classList.remove('editing');
+                            cell.innerHTML = originalContent;
+                        }
+                    } else {
+                        cell.classList.remove('editing');
+                        cell.innerHTML = originalContent;
+                    }
+                } else if (e.key === 'Escape') {
+                    cell.classList.remove('editing');
+                    cell.innerHTML = originalContent;
+                }
+            });
+
+            input.addEventListener('blur', () => {
+                setTimeout(() => {
+                    if (cell.classList.contains('editing')) {
+                        cell.classList.remove('editing');
+                        cell.innerHTML = originalContent;
+                    }
+                }, 200);
+            });
+        }
+
+        async function saveInlineEdit(key, value, type) {
+            try {
+                const translations = {};
+                // Tüm dillere aynı değeri yaz (sonra modal'da düzenlenebilir)
+                availableLanguages.forEach(lang => {
+                    translations[lang] = value;
+                });
+
+                const response = await fetch('/api/update-key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        key: key,
+                        translations: translations,
+                        module: 'Localizable'
+                    })
+                });
+
+                const result = await response.json();
+                return result.success;
+            } catch (e) {
+                showToast('Kaydetme hatası: ' + e.message, 'error');
+                return false;
+            }
+        }
+
+        // ========== BATCH EDIT FUNCTIONS ==========
+
+        function openBatchEdit() {
+            const modal = document.getElementById('batchEditModal');
+            const body = document.getElementById('batchEditBody');
+
+            // Seçili öğeleri topla
+            const allItems = [
+                ...Array.from(selectedItems.hardcoded.values()),
+                ...Array.from(selectedItems.missing.values())
+            ];
+
+            if (allItems.length === 0) {
+                showToast('Lütfen önce öğe seçin', 'info');
+                return;
+            }
+
+            // Edit form oluştur
+            body.innerHTML = allItems.map((item, idx) => `
+                <div class="edit-item" data-index="${idx}">
+                    <div class="edit-item-header">
+                        <span class="edit-item-key">${escapeHtml(item.suggestedKey || item.key)}</span>
+                        <button class="edit-item-remove" onclick="removeEditItem(${idx})">✖</button>
+                    </div>
+                    <div class="edit-translations">
+                        ${availableLanguages.map(lang => `
+                            <div class="translation-row">
+                                <span class="translation-lang">${lang}</span>
+                                <input type="text" class="translation-input"
+                                       data-lang="${lang}"
+                                       data-key="${escapeHtml(item.suggestedKey || item.key)}"
+                                       value="${escapeHtml(item.text || '')}"
+                                       placeholder="${lang} çevirisi...">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+
+            modal.classList.add('visible');
+        }
+
+        function closeBatchEdit() {
+            document.getElementById('batchEditModal').classList.remove('visible');
+        }
+
+        function removeEditItem(index) {
+            const item = document.querySelector(`.edit-item[data-index="${index}"]`);
+            if (item) {
+                item.remove();
+            }
+        }
+
+        async function saveBatchEdit() {
+            const items = document.querySelectorAll('.edit-item');
+            const updates = [];
+
+            items.forEach(item => {
+                const inputs = item.querySelectorAll('.translation-input');
+                const translations = {};
+                let key = '';
+
+                inputs.forEach(input => {
+                    const lang = input.dataset.lang;
+                    const value = input.value.trim();
+                    key = input.dataset.key;
+
+                    if (value) {
+                        translations[lang] = value;
+                    }
+                });
+
+                if (key && Object.keys(translations).length > 0) {
+                    updates.push({
+                        key: key,
+                        translations: translations,
+                        module: 'Localizable'
+                    });
+                }
+            });
+
+            if (updates.length === 0) {
+                showToast('Kaydedilecek değişiklik yok', 'info');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/update-keys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ updates: updates })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast(`${result.success_count}/${result.total} öğe kaydedildi`, 'success');
+                    closeBatchEdit();
+                    clearSelection();
+                } else {
+                    showToast('Kaydetme hatası: ' + result.error, 'error');
+                }
+            } catch (e) {
+                showToast('Kaydetme hatası: ' + e.message, 'error');
+            }
+        }
+
+        // ========== TOAST NOTIFICATIONS ==========
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
         }
         '''
