@@ -1,10 +1,23 @@
 """Version information for localization-analyzer."""
 
-__version__ = "1.12.0"
+__version__ = "1.13.0"
 __author__ = "Sezgin Paksoy"
 __description__ = "Professional localization analyzer for multi-platform projects"
 
 # Changelog:
+# 1.13.0 - Interactive HTML Dashboard Report
+#        - New HTMLReporter class with full-featured dashboard
+#        - Dark/Light theme support with theme toggle
+#        - Filterable and searchable data tables
+#        - Collapsible sections for better navigation
+#        - JSON export functionality from browser
+#        - Pagination for large datasets
+#        - Local HTTP server for serving reports (--serve flag)
+#        - Auto-open in browser with --serve option
+#        - ReportServer class for programmatic server control
+#        - Context manager support for server lifecycle
+#        - Added 45 new tests (22 HTML reporter, 23 server)
+#
 # 1.12.0 - Improved error handling across all modules
 #        - Empty except:pass blocks replaced with proper error handling
 #        - Multi-language character support (15+ languages)

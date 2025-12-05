@@ -23,6 +23,8 @@ from .features.diff import LocalizationDiff, DiffResult
 from .features.sync import LocalizationSync, SyncSummary
 from .reports.json_reporter import JSONReporter
 from .reports.console_reporter import ConsoleReporter
+from .reports.html_reporter import HTMLReporter
+from .utils.server import serve_report, ReportServer
 
 
 def load_and_validate_config(validate: bool = True, verbose: bool = False) -> Config:
@@ -130,6 +132,26 @@ def cmd_analyze(args):
             result=result,
             file_manager=analyzer.file_manager,
             show_details=args.verbose
+        )
+
+    # HTML report
+    html_path = None
+    if 'html' in config.reports.formats or args.html or args.serve:
+        html_output = Path(args.html) if args.html else Path(config.reports.output) / 'report.html'
+        html_path = HTMLReporter.generate(
+            result=result,
+            file_manager=analyzer.file_manager,
+            adapter=adapter,
+            output_path=html_output
+        )
+
+    # Serve HTML if requested
+    if args.serve and html_path:
+        serve_report(
+            report_path=html_path,
+            port=args.port,
+            open_browser=not args.no_browser,
+            blocking=True
         )
 
     # Check threshold
@@ -963,6 +985,13 @@ def main():
     analyze_parser.add_argument('--no-threads', action='store_true', help='Disable multi-threading')
     analyze_parser.add_argument('--fail-below', type=int, metavar='SCORE',
                                help='Exit with error if score below threshold')
+    analyze_parser.add_argument('--html', metavar='PATH', help='Output HTML report')
+    analyze_parser.add_argument('--serve', action='store_true',
+                               help='Start local server and open HTML report in browser')
+    analyze_parser.add_argument('--port', type=int, metavar='PORT',
+                               help='Server port (default: auto)')
+    analyze_parser.add_argument('--no-browser', action='store_true',
+                               help='Do not open browser automatically')
 
     # fix command
     fix_parser = subparsers.add_parser('fix', help='Auto-fix hardcoded strings')
