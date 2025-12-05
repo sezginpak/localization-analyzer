@@ -150,7 +150,11 @@ class MissingKeysFixer:
                 end = min(len(content), match.end() + 100)
                 context['surrounding_code'] = content[start:end]
 
-        except Exception as e:
+        except (IOError, OSError, UnicodeDecodeError):
+            # File read errors - return context with empty surrounding_code
+            pass
+        except re.error:
+            # Invalid regex pattern - return context as is
             pass
 
         return context

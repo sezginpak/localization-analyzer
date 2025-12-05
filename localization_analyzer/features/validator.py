@@ -303,8 +303,9 @@ class LocalizationValidator:
                 key, value = match.groups()
                 keys[key] = value
 
-        except Exception:
-            pass
+        except (IOError, OSError, UnicodeDecodeError) as e:
+            # File read errors - return empty dict
+            print(f"  Warning: Could not parse {file_path.name}: {e}")
 
         return keys
 

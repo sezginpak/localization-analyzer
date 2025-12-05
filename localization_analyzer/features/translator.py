@@ -80,7 +80,9 @@ class TranslationService:
             try:
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
                     self.cache = json.load(f)
-            except Exception:
+            except (json.JSONDecodeError, IOError, OSError) as e:
+                # Cache file corrupted or unreadable, start fresh
+                print(f"{Colors.warning('⚠️')}  Cache load failed ({e.__class__.__name__}), starting fresh")
                 self.cache = {}
 
     def _save_cache(self):
@@ -90,8 +92,9 @@ class TranslationService:
                 self.cache_file.parent.mkdir(parents=True, exist_ok=True)
                 with open(self.cache_file, 'w', encoding='utf-8') as f:
                     json.dump(self.cache, f, ensure_ascii=False, indent=2)
-            except Exception:
-                pass
+            except (IOError, OSError, PermissionError) as e:
+                # Non-critical: cache save failure doesn't break functionality
+                print(f"{Colors.warning('⚠️')}  Cache save failed: {e}")
 
     def translate(
         self,

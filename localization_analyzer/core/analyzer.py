@@ -218,6 +218,7 @@ class LocalizationAnalyzer:
                 if compiled_pattern.match(existing_key) and existing_key != key:
                     return True
         except re.error:
+            # Invalid regex pattern derived from key - treat as no match
             pass
 
         return False

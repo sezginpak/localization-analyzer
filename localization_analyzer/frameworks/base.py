@@ -125,13 +125,57 @@ class BaseAdapter(ABC):
         """
         import re
 
-        # Skip emoji-only strings
+        # Comprehensive emoji pattern - covers all Unicode emoji ranges
         emoji_pattern = re.compile(
-            r'[\U0001F300-\U0001F9FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF'
-            r'\U0001FA70-\U0001FAFF\U00002600-\U000026FF\U00002700-\U000027BF'
-            r'\U0001F1E0-\U0001F1FF\U00002300-\U000023FF\U0000FE00-\U0000FE0F'
-            r'\U0001F900-\U0001F9FF]+'
+            r'[\U0001F300-\U0001F9FF'  # Misc Symbols & Pictographs, Emoticons, etc.
+            r'\U0001F600-\U0001F64F'   # Emoticons
+            r'\U0001F680-\U0001F6FF'   # Transport & Map
+            r'\U0001FA70-\U0001FAFF'   # Symbols & Pictographs Extended-A
+            r'\U00002600-\U000026FF'   # Misc symbols (sun, cloud, etc.)
+            r'\U00002700-\U000027BF'   # Dingbats
+            r'\U0001F1E0-\U0001F1FF'   # Flags
+            r'\U00002300-\U000023FF'   # Misc Technical
+            r'\U0000FE00-\U0000FE0F'   # Variation Selectors
+            r'\U0001F900-\U0001F9FF'   # Supplemental Symbols
+            r'\U00002702-\U000027B0'   # Dingbats
+            r'\U0001FA00-\U0001FA6F'   # Chess symbols, etc.
+            r'\U00002194-\U00002199'   # Arrows
+            r'\U000021A9-\U000021AA'   # More arrows
+            r'\U0000231A-\U0000231B'   # Watch, hourglass
+            r'\U000023E9-\U000023F3'   # Media symbols
+            r'\U000023F8-\U000023FA'   # Media controls
+            r'\U000025AA-\U000025AB'   # Squares
+            r'\U000025B6\U000025C0'    # Play buttons
+            r'\U000025FB-\U000025FE'   # Squares
+            r'\U00002614-\U00002615'   # Umbrella, hot beverage
+            r'\U00002648-\U00002653'   # Zodiac
+            r'\U0000267F'              # Wheelchair
+            r'\U00002693'              # Anchor
+            r'\U000026A1'              # High voltage
+            r'\U000026AA-\U000026AB'   # Circles
+            r'\U000026BD-\U000026BE'   # Sports
+            r'\U000026C4-\U000026C5'   # Weather
+            r'\U000026CE'              # Ophiuchus
+            r'\U000026D4'              # No entry
+            r'\U000026EA'              # Church
+            r'\U000026F2-\U000026F3'   # Fountain, golf
+            r'\U000026F5'              # Sailboat
+            r'\U000026FA'              # Tent
+            r'\U000026FD'              # Fuel pump
+            r'\U00002934-\U00002935'   # Arrows
+            r'\U00002B05-\U00002B07'   # Arrows
+            r'\U00002B1B-\U00002B1C'   # Squares
+            r'\U00002B50'              # Star
+            r'\U00002B55'              # Circle
+            r'\U00003030'              # Wavy dash
+            r'\U0000303D'              # Part alternation mark
+            r'\U00003297'              # Circled Ideograph Congratulation
+            r'\U00003299'              # Circled Ideograph Secret
+            r'\U0000200D'              # Zero Width Joiner (for compound emojis)
+            r']+'
         )
+
+        # Skip emoji-only strings
         text_without_emoji = emoji_pattern.sub('', text.strip())
         if not text_without_emoji:
             return 0  # Pure emoji - skip

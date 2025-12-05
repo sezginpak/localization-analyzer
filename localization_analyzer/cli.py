@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .__version__ import __version__
 from .utils.colors import Colors
-from .utils.config import Config, create_default_config
+from .utils.config import Config, create_default_config, ConfigValidationError
 from .utils.backup import create_backup
 from .frameworks.swift import SwiftAdapter
 from .core.analyzer import LocalizationAnalyzer
@@ -23,6 +23,40 @@ from .features.diff import LocalizationDiff, DiffResult
 from .features.sync import LocalizationSync, SyncSummary
 from .reports.json_reporter import JSONReporter
 from .reports.console_reporter import ConsoleReporter
+
+
+def load_and_validate_config(validate: bool = True, verbose: bool = False) -> Config:
+    """
+    Load configuration and optionally validate it.
+
+    Args:
+        validate: Whether to validate the config
+        verbose: Whether to print warnings
+
+    Returns:
+        Loaded Config object
+
+    Raises:
+        ConfigValidationError: If validation fails with errors
+    """
+    config = Config.from_file()
+
+    if validate:
+        errors, warnings = config.validate()
+
+        # Print warnings if verbose
+        if verbose and warnings:
+            for warning in warnings:
+                print(f"{Colors.warning('⚠️')}  Config warning: {warning}")
+
+        # Raise on errors
+        if errors:
+            print(f"{Colors.error('❌')} Configuration errors:")
+            for error in errors:
+                print(f"   • {error}")
+            raise ConfigValidationError(errors)
+
+    return config
 
 
 def cmd_init(args):
@@ -47,8 +81,11 @@ def cmd_init(args):
 
 def cmd_analyze(args):
     """Run analysis."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=args.verbose)
+    except ConfigValidationError:
+        return 1
 
     # Determine framework
     if args.framework:
@@ -105,8 +142,11 @@ def cmd_analyze(args):
 
 def cmd_fix(args):
     """Fix hardcoded strings."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=False)
+    except ConfigValidationError:
+        return 1
 
     # Create adapter
     adapter = SwiftAdapter(l10n_config=config.l10n)
@@ -166,8 +206,11 @@ def cmd_fix(args):
 
 def cmd_missing(args):
     """Fix missing keys."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=False)
+    except ConfigValidationError:
+        return 1
 
     # Create adapter
     adapter = SwiftAdapter(l10n_config=config.l10n)
@@ -237,8 +280,11 @@ def cmd_missing(args):
 
 def cmd_generate(args):
     """Generate L10n enum and .strings entries."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=False)
+    except ConfigValidationError:
+        return 1
 
     if not config.l10n.enabled:
         print(f"{Colors.error('❌')} L10n is not enabled in config")
@@ -314,8 +360,11 @@ def cmd_generate(args):
 
 def cmd_migrate(args):
     """Migrate L10n enum patterns to .localized(from:) pattern."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=False)
+    except ConfigValidationError:
+        return 1
 
     # Setup paths
     project_dir = Path(config.paths.source)
@@ -349,8 +398,11 @@ def cmd_migrate(args):
 
 def cmd_lang(args):
     """Manage languages."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=False)
+    except ConfigValidationError:
+        return 1
 
     # Create adapter
     adapter = SwiftAdapter(l10n_config=config.l10n)
@@ -413,8 +465,11 @@ def cmd_lang(args):
 
 def cmd_diff(args):
     """Compare two languages."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=args.verbose)
+    except ConfigValidationError:
+        return 1
 
     # Create adapter
     adapter = SwiftAdapter(l10n_config=config.l10n)
@@ -472,8 +527,11 @@ def cmd_diff(args):
 
 def cmd_sync(args):
     """Synchronize all languages with source language."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=args.verbose)
+    except ConfigValidationError:
+        return 1
 
     # Create adapter
     adapter = SwiftAdapter(l10n_config=config.l10n)
@@ -543,8 +601,11 @@ def cmd_sync(args):
 
 def cmd_stats(args):
     """Show localization statistics."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=False)
+    except ConfigValidationError:
+        return 1
 
     # Create adapter
     adapter = SwiftAdapter(l10n_config=config.l10n)
@@ -591,8 +652,11 @@ def cmd_stats(args):
 
 def cmd_validate(args):
     """Validate localization files."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=args.verbose)
+    except ConfigValidationError:
+        return 1
 
     # Create adapter
     adapter = SwiftAdapter(l10n_config=config.l10n)
@@ -689,8 +753,11 @@ def cmd_validate(args):
 
 def cmd_discover(args):
     """Discover tables and modules from project structure."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=False)
+    except ConfigValidationError:
+        return 1
 
     # Create adapter
     adapter = SwiftAdapter(l10n_config=config.l10n)
@@ -772,8 +839,11 @@ def cmd_discover(args):
 
 def cmd_translate(args):
     """Translate localization files."""
-    # Load config
-    config = Config.from_file()
+    # Load and validate config
+    try:
+        config = load_and_validate_config(validate=True, verbose=args.verbose)
+    except ConfigValidationError:
+        return 1
 
     # Create adapter
     adapter = SwiftAdapter(l10n_config=config.l10n)

@@ -7,6 +7,24 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
 
+class ConfigValidationError(Exception):
+    """Raised when configuration validation fails."""
+
+    def __init__(self, errors: List[str]):
+        self.errors = errors
+        super().__init__(f"Configuration validation failed: {'; '.join(errors)}")
+
+
+class ConfigValidationWarning:
+    """Represents a configuration warning (non-fatal)."""
+
+    def __init__(self, message: str):
+        self.message = message
+
+    def __str__(self):
+        return self.message
+
+
 @dataclass
 class ProjectConfig:
     """Project configuration."""
@@ -156,6 +174,112 @@ class Config:
 
         with open(config_path, 'w', encoding='utf-8') as f:
             yaml.dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
+
+    def validate(self, raise_on_error: bool = False) -> tuple[List[str], List[ConfigValidationWarning]]:
+        """
+        Validate configuration and return errors and warnings.
+
+        Args:
+            raise_on_error: If True, raise ConfigValidationError on validation errors
+
+        Returns:
+            Tuple of (errors, warnings) lists
+        """
+        errors = []
+        warnings = []
+
+        # Validate framework
+        valid_frameworks = ['swift', 'react', 'flutter', 'android']
+        if self.project.framework not in valid_frameworks:
+            errors.append(
+                f"Invalid framework '{self.project.framework}'. "
+                f"Valid options: {', '.join(valid_frameworks)}"
+            )
+
+        # Validate source path exists
+        source_path = Path(self.paths.source)
+        if not source_path.exists():
+            warnings.append(ConfigValidationWarning(
+                f"Source path does not exist: {self.paths.source}"
+            ))
+
+        # Validate primary language format (ISO 639-1)
+        if not self._is_valid_lang_code(self.languages.primary):
+            errors.append(
+                f"Invalid primary language code: '{self.languages.primary}'. "
+                f"Use ISO 639-1 format (e.g., 'en', 'tr', 'de')"
+            )
+
+        # Validate supported languages
+        for lang in self.languages.supported:
+            if not self._is_valid_lang_code(lang):
+                errors.append(
+                    f"Invalid supported language code: '{lang}'. "
+                    f"Use ISO 639-1 format"
+                )
+
+        # Check if primary language is in supported languages
+        if self.languages.primary not in self.languages.supported:
+            warnings.append(ConfigValidationWarning(
+                f"Primary language '{self.languages.primary}' not in supported languages list"
+            ))
+
+        # Validate auto_fix min_priority range
+        if not 1 <= self.auto_fix.min_priority <= 10:
+            errors.append(
+                f"auto_fix.min_priority must be between 1 and 10, got {self.auto_fix.min_priority}"
+            )
+
+        # Validate report formats
+        valid_formats = ['json', 'console', 'html', 'markdown']
+        for fmt in self.reports.formats:
+            if fmt not in valid_formats:
+                warnings.append(ConfigValidationWarning(
+                    f"Unknown report format: '{fmt}'. Valid options: {', '.join(valid_formats)}"
+                ))
+
+        # Validate L10n config
+        if self.l10n.enabled:
+            if not self.l10n.enum_name:
+                errors.append("l10n.enum_name cannot be empty when l10n is enabled")
+
+            if not self.l10n.default_module:
+                errors.append("l10n.default_module cannot be empty when l10n is enabled")
+
+        # Raise error if requested
+        if raise_on_error and errors:
+            raise ConfigValidationError(errors)
+
+        return errors, warnings
+
+    @staticmethod
+    def _is_valid_lang_code(code: str) -> bool:
+        """
+        Check if a language code is valid (ISO 639-1 or common variants).
+
+        Args:
+            code: Language code to validate
+
+        Returns:
+            True if valid, False otherwise
+        """
+        if not code or not isinstance(code, str):
+            return False
+
+        # Allow 2-letter ISO 639-1 codes
+        if len(code) == 2 and code.isalpha():
+            return True
+
+        # Allow locale variants like en-US, pt-BR, zh-Hans
+        if '-' in code:
+            parts = code.split('-')
+            if len(parts) == 2:
+                # Check base language (2 letters) and region (2-4 chars)
+                base, region = parts
+                if len(base) == 2 and base.isalpha() and 2 <= len(region) <= 4:
+                    return True
+
+        return False
 
 
 def create_default_config(framework: str = 'swift') -> Config:

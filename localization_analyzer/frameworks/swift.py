@@ -10,6 +10,12 @@ from .base import BaseAdapter, LocalizationPattern
 class SwiftAdapter(BaseAdapter):
     """Adapter for Swift/iOS projects using .strings files."""
 
+    # Class-level compiled pattern cache for performance
+    _compiled_hardcoded_patterns = None
+    _compiled_localized_patterns = None
+    _compiled_exclusion_patterns = None
+    _compiled_emoji_pattern = None
+
     def __init__(self, l10n_config=None):
         super().__init__()
         self.l10n_config = l10n_config
@@ -535,6 +541,68 @@ class SwiftAdapter(BaseAdapter):
             r'^(blue|green|red|purple|orange|pink|gray|yellow|white|black)$',  # Color names (single words)
         ]
 
+    @classmethod
+    def _get_compiled_emoji_pattern(cls):
+        """Get cached compiled emoji pattern for performance."""
+        if cls._compiled_emoji_pattern is None:
+            cls._compiled_emoji_pattern = re.compile(
+                r'[\U0001F300-\U0001F9FF'  # Misc Symbols & Pictographs, Emoticons, etc.
+                r'\U0001F600-\U0001F64F'   # Emoticons
+                r'\U0001F680-\U0001F6FF'   # Transport & Map
+                r'\U0001FA70-\U0001FAFF'   # Symbols & Pictographs Extended-A
+                r'\U00002600-\U000026FF'   # Misc symbols (sun, cloud, etc.)
+                r'\U00002700-\U000027BF'   # Dingbats
+                r'\U0001F1E0-\U0001F1FF'   # Flags
+                r'\U00002300-\U000023FF'   # Misc Technical
+                r'\U0000FE00-\U0000FE0F'   # Variation Selectors
+                r'\U0001F900-\U0001F9FF'   # Supplemental Symbols
+                r'\U00002702-\U000027B0'   # Dingbats
+                r'\U0001FA00-\U0001FA6F'   # Chess symbols, etc.
+                r'\U00002194-\U00002199'   # Arrows
+                r'\U000021A9-\U000021AA'   # More arrows
+                r'\U0000231A-\U0000231B'   # Watch, hourglass
+                r'\U000023E9-\U000023F3'   # Media symbols
+                r'\U000023F8-\U000023FA'   # Media controls
+                r'\U000025AA-\U000025AB'   # Squares
+                r'\U000025B6\U000025C0'    # Play buttons
+                r'\U000025FB-\U000025FE'   # Squares
+                r'\U00002614-\U00002615'   # Umbrella, hot beverage
+                r'\U00002648-\U00002653'   # Zodiac
+                r'\U0000267F'              # Wheelchair
+                r'\U00002693'              # Anchor
+                r'\U000026A1'              # High voltage
+                r'\U000026AA-\U000026AB'   # Circles
+                r'\U000026BD-\U000026BE'   # Sports
+                r'\U000026C4-\U000026C5'   # Weather
+                r'\U000026CE'              # Ophiuchus
+                r'\U000026D4'              # No entry
+                r'\U000026EA'              # Church
+                r'\U000026F2-\U000026F3'   # Fountain, golf
+                r'\U000026F5'              # Sailboat
+                r'\U000026FA'              # Tent
+                r'\U000026FD'              # Fuel pump
+                r'\U00002934-\U00002935'   # Arrows
+                r'\U00002B05-\U00002B07'   # Arrows
+                r'\U00002B1B-\U00002B1C'   # Squares
+                r'\U00002B50'              # Star
+                r'\U00002B55'              # Circle
+                r'\U00003030'              # Wavy dash
+                r'\U0000303D'              # Part alternation mark
+                r'\U00003297'              # Circled Ideograph Congratulation
+                r'\U00003299'              # Circled Ideograph Secret
+                r'\U0000200D'              # Zero Width Joiner (for compound emojis)
+                r'\U0000FE0F'              # Variation Selector-16
+                r']+'
+            )
+        return cls._compiled_emoji_pattern
+
+    @classmethod
+    def _get_compiled_exclusion_patterns(cls, patterns):
+        """Get cached compiled exclusion patterns for performance."""
+        if cls._compiled_exclusion_patterns is None:
+            cls._compiled_exclusion_patterns = [re.compile(p) for p in patterns]
+        return cls._compiled_exclusion_patterns
+
     def should_exclude_string(self, text: str) -> bool:
         """
         Check if a string should be excluded from localization.
@@ -548,45 +616,42 @@ class SwiftAdapter(BaseAdapter):
         if not text or not text.strip():
             return True
 
-        # Special handling for emojis
-        emoji_pattern = re.compile(r'[\U0001F300-\U0001F9FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\U00002600-\U000026FF\U00002700-\U000027BF\U0001F900-\U0001F9FF\U0001FA70-\U0001FAFF]')
+        # Use cached compiled emoji pattern for performance
+        emoji_pattern = self._get_compiled_emoji_pattern()
 
-        # If string contains ONLY emoji(s) and NO other text
-        if emoji_pattern.search(text):
-            # Remove all emojis and check if anything is left
-            text_without_emoji = emoji_pattern.sub('', text).strip()
-            if not text_without_emoji:
-                # Pure emoji string - this is likely meaningful UI (e.g., mood indicators)
-                # DON'T exclude it - let it be caught for localization
-                # But if it's a single common icon emoji, exclude it
-                single_emoji_excludes = ['✓', '✗', '•', '→', '←', '↑', '↓', '⚠️', '❌', '✅']
-                if text.strip() in single_emoji_excludes:
-                    return True
-                # Multi-emoji or semantic emoji strings should be localized
-                return False
+        # Check if string is pure emoji(s) - NO alphabetic text at all
+        text_without_emoji = emoji_pattern.sub('', text).strip()
 
-        # Check against exclusion patterns
-        for pattern in self.exclusion_patterns:
-            if re.search(pattern, text):
+        # If nothing left after removing emojis, it's a pure emoji string - EXCLUDE IT
+        if not text_without_emoji:
+            return True
+
+        # Use cached compiled exclusion patterns for performance
+        compiled_patterns = self._get_compiled_exclusion_patterns(self.exclusion_patterns)
+        for pattern in compiled_patterns:
+            if pattern.search(text):
                 return True
 
-        # Exclude single English words without Turkish characters (likely technical identifiers)
-        # But keep Turkish words and multi-word phrases
-        turkish_chars = ['ç', 'ğ', 'ı', 'ö', 'ş', 'ü', 'Ç', 'Ğ', 'İ', 'Ö', 'Ş', 'Ü']
-        has_turkish = any(char in text for char in turkish_chars)
+        # Exclude single English words without special characters (likely technical identifiers)
+        # But keep localized words and multi-word phrases
+        # Check for special characters from multiple languages
+        special_chars = set(self.CHAR_MAP.keys())
+        has_special_char = any(char in text for char in special_chars)
         has_space = ' ' in text
 
-        # If it's a single English word without Turkish chars, likely technical
-        if not has_turkish and not has_space and len(text.split()) == 1:
+        # If it's a single word without special chars, likely technical
+        if not has_special_char and not has_space and len(text.split()) == 1:
             # Check if it's all ASCII letters (no numbers, symbols)
             if text.isalpha() and text.isascii():
                 # But allow common UI words that should be localized
                 common_ui_words = ['Home', 'Save', 'Cancel', 'Delete', 'Edit', 'Settings',
-                                   'Profile', 'Search', 'Filter', 'Sort', 'View', 'Add']
+                                   'Profile', 'Search', 'Filter', 'Sort', 'View', 'Add',
+                                   'Back', 'Next', 'Done', 'OK', 'Yes', 'No', 'Close',
+                                   'Open', 'Create', 'Update', 'Submit', 'Send', 'Share']
                 if text not in common_ui_words:
                     return True
 
-        # Keep Turkish characters and multi-word phrases
+        # Keep special characters and multi-word phrases
         return False
 
     def get_file_extensions(self) -> List[str]:
@@ -683,9 +748,53 @@ class SwiftAdapter(BaseAdapter):
 
         return self.l10n_config.default_module
 
+    # Character mapping for multiple languages (special characters to ASCII)
+    # Supports: Turkish, German, French, Spanish, Portuguese, Polish, Czech,
+    # Hungarian, Romanian, Swedish, Norwegian, Danish, Finnish, Italian, Dutch
+    CHAR_MAP = {
+        # Turkish
+        'ç': 'c', 'Ç': 'C', 'ğ': 'g', 'Ğ': 'G', 'ı': 'i', 'İ': 'I',
+        'ö': 'o', 'Ö': 'O', 'ş': 's', 'Ş': 'S', 'ü': 'u', 'Ü': 'U',
+        # German
+        'ä': 'a', 'Ä': 'A', 'ß': 'ss',
+        # French
+        'à': 'a', 'â': 'a', 'æ': 'ae', 'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
+        'î': 'i', 'ï': 'i', 'ô': 'o', 'œ': 'oe', 'ù': 'u', 'û': 'u', 'ÿ': 'y',
+        'À': 'A', 'Â': 'A', 'Æ': 'AE', 'È': 'E', 'É': 'E', 'Ê': 'E', 'Ë': 'E',
+        'Î': 'I', 'Ï': 'I', 'Ô': 'O', 'Œ': 'OE', 'Ù': 'U', 'Û': 'U', 'Ÿ': 'Y',
+        # Spanish
+        'á': 'a', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n',
+        'Á': 'A', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ñ': 'N',
+        # Portuguese
+        'ã': 'a', 'õ': 'o',
+        'Ã': 'A', 'Õ': 'O',
+        # Polish
+        'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n', 'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z',
+        'Ą': 'A', 'Ć': 'C', 'Ę': 'E', 'Ł': 'L', 'Ń': 'N', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z',
+        # Czech
+        'č': 'c', 'ď': 'd', 'ě': 'e', 'ň': 'n', 'ř': 'r', 'ť': 't', 'ů': 'u', 'ý': 'y', 'ž': 'z',
+        'Č': 'C', 'Ď': 'D', 'Ě': 'E', 'Ň': 'N', 'Ř': 'R', 'Ť': 'T', 'Ů': 'U', 'Ý': 'Y', 'Ž': 'Z',
+        # Hungarian
+        'ő': 'o', 'ű': 'u',
+        'Ő': 'O', 'Ű': 'U',
+        # Romanian
+        'ă': 'a', 'â': 'a', 'î': 'i', 'ș': 's', 'ț': 't',
+        'Ă': 'A', 'Â': 'A', 'Î': 'I', 'Ș': 'S', 'Ț': 'T',
+        # Scandinavian (Swedish, Norwegian, Danish)
+        'å': 'a', 'Å': 'A', 'ø': 'o', 'Ø': 'O',
+        # Dutch
+        'ĳ': 'ij', 'Ĳ': 'IJ',
+        # General Latin Extended
+        'ð': 'd', 'Ð': 'D', 'þ': 'th', 'Þ': 'TH',
+    }
+
     def text_to_key(self, text: str) -> str:
         """
         Convert text to a localization key.
+
+        Supports special characters from multiple languages:
+        Turkish, German, French, Spanish, Portuguese, Polish, Czech,
+        Hungarian, Romanian, Swedish, Norwegian, Danish, Finnish, Italian, Dutch
 
         Args:
             text: Original text
@@ -695,17 +804,15 @@ class SwiftAdapter(BaseAdapter):
         """
         import unicodedata
 
-        # Normalize unicode characters
+        # First, apply explicit character mappings for known special chars
+        for char, replacement in self.CHAR_MAP.items():
+            text = text.replace(char, replacement)
+
+        # Normalize unicode characters (handles remaining accents)
         text = unicodedata.normalize('NFKD', text)
 
-        # Remove accents
+        # Remove combining characters (accents that weren't mapped)
         text = ''.join(c for c in text if not unicodedata.combining(c))
-
-        # Replace Turkish characters
-        tr_map = {'ç': 'c', 'ğ': 'g', 'ı': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u',
-                  'Ç': 'C', 'Ğ': 'G', 'İ': 'I', 'Ö': 'O', 'Ş': 'S', 'Ü': 'U'}
-        for tr, en in tr_map.items():
-            text = text.replace(tr, en)
 
         # Split into words
         words = re.split(r'[^a-zA-Z0-9]+', text)

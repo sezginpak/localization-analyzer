@@ -206,7 +206,8 @@ class LocalizationSync:
         try:
             shutil.copy2(file_path, backup_path)
             return backup_path
-        except Exception:
+        except (IOError, OSError, PermissionError, shutil.Error) as e:
+            print(f"  Warning: Backup failed for {file_path.name}: {e}")
             return None
 
     def _append_to_file(self, file_path: Path, entries: Dict[str, str]):

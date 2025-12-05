@@ -4,7 +4,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.10.0-brightgreen.svg)](https://github.com/sezginpak/localization-analyzer)
+[![Version](https://img.shields.io/badge/version-1.11.0-brightgreen.svg)](https://github.com/sezginpaksoy/localization-analyzer)
 
 ## Why localization-analyzer?
 

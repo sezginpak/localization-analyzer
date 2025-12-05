@@ -75,3 +75,7 @@ venv.bak/
 localization_reports/
 .localization_cache/
 *.log
+
+# Secrets
+.pypirc
+pypi_token.txt
