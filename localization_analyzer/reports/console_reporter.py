@@ -33,6 +33,7 @@ class ConsoleReporter:
         if show_details:
             ConsoleReporter._print_hardcoded_strings(result.hardcoded_strings[:10])
             ConsoleReporter._print_missing_keys(result.missing_keys, file_manager, limit=10)
+            ConsoleReporter._print_missing_dynamic_keys(result.missing_dynamic_keys, limit=10)
             ConsoleReporter._print_dynamic_keys(result.dynamic_keys, limit=5)
             ConsoleReporter._print_dead_keys(result.dead_keys, file_manager, limit=10)
             ConsoleReporter._print_duplicates(result.duplicates, limit=5)
@@ -124,6 +125,47 @@ class ConsoleReporter:
             if len(files) > 3:
                 print(f"   ... and {len(files) - 3} more")
             print()
+
+    @staticmethod
+    def _print_missing_dynamic_keys(missing_dynamic: dict, limit: int = 10):
+        """Print missing dynamic keys (enum-based analysis)."""
+        if not missing_dynamic:
+            return
+
+        print(f"\n{Colors.bold('🔴 MISSING DYNAMIC KEYS (enum-based analysis)')}")
+        print("-" * 70)
+        print(f"{Colors.error('⚠️  These keys are expected based on enum definitions but missing in .strings')}")
+        print()
+
+        total_missing = 0
+        for i, (pattern, info) in enumerate(list(missing_dynamic.items())[:limit], 1):
+            enum_name = info.get('enum', 'Unknown')
+            missing_keys = info.get('missing_keys', [])
+            existing_keys = info.get('existing_keys', [])
+            file_path = info.get('file', '')
+            line_num = info.get('line', 0)
+
+            # Dosya adını kısalt
+            short_file = Path(file_path).name if file_path else 'unknown'
+
+            print(f"{i}. Pattern: {Colors.OKCYAN}\"{pattern}\"{Colors.ENDC}")
+            print(f"   Enum: {Colors.info(enum_name)} | File: {short_file}:{line_num}")
+            print(f"   Existing: {len(existing_keys)} | {Colors.error(f'Missing: {len(missing_keys)}')}")
+
+            # Eksik key'leri göster (max 5)
+            for key in missing_keys[:5]:
+                print(f"   {Colors.error('✗')} {key}")
+            if len(missing_keys) > 5:
+                print(f"   ... and {len(missing_keys) - 5} more missing")
+            print()
+
+            total_missing += len(missing_keys)
+
+        if len(missing_dynamic) > limit:
+            print(f"... and {len(missing_dynamic) - limit} more patterns with missing keys")
+
+        print(f"\n{Colors.bold(f'Total: {total_missing} missing dynamic keys')}")
+        print()
 
     @staticmethod
     def _print_dynamic_keys(dynamic_keys: dict, limit: int = 5):

@@ -1,10 +1,22 @@
 """Version information for localization-analyzer."""
 
-__version__ = "1.15.0"
+__version__ = "1.16.0"
 __author__ = "Sezgin Paksoy"
 __description__ = "Professional localization analyzer for multi-platform projects"
 
 # Changelog:
+# 1.16.0 - Dynamic Key Analysis (Enum-based Missing Key Detection)
+#        - New DynamicKeyAnalyzer class for enum-based key validation
+#        - Discovers Swift enum definitions from source code
+#        - Detects "prefix.\(variable)".localized patterns
+#        - Matches patterns to enum cases and validates all keys exist
+#        - Reports missing keys based on enum case analysis
+#        - New missing_dynamic_keys field in AnalysisResult
+#        - Console reporter shows missing dynamic keys section
+#        - Supports raw value extraction from enum cases
+#        - Excludes build/DerivedData/Pods directories
+#        - Added 14 new dynamic key analyzer tests
+#
 # 1.15.0 - Reduced False Positives in Hardcoded String Detection
 #        - Date/time format patterns excluded (dd/MM/yyyy, HH:mm:ss, etc.)
 #        - Pure symbol/punctuation strings excluded (·, -, :, •, →, etc.)

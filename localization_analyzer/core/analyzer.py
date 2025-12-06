@@ -34,6 +34,7 @@ class AnalysisResult:
     dead_keys: Set[str] = field(default_factory=set)
     missing_keys: Dict[str, List[str]] = field(default_factory=dict)  # key -> [files using it]
     dynamic_keys: Dict[str, List[str]] = field(default_factory=dict)  # Dinamik key'ler (bilgi amaçlı)
+    missing_dynamic_keys: Dict[str, Dict] = field(default_factory=dict)  # Enum-based eksik key'ler
     duplicates: Dict[str, List[HardcodedString]] = field(default_factory=dict)
     component_stats: Dict[str, Dict] = field(default_factory=dict)
     file_stats: Dict[str, Dict] = field(default_factory=dict)
@@ -124,6 +125,9 @@ class LocalizationAnalyzer:
         # Analyze duplicates
         self._analyze_duplicates(verbose)
 
+        # Analyze dynamic key patterns for missing enum-based keys
+        missing_dynamic_keys = self._analyze_dynamic_key_patterns(verbose)
+
         # Calculate health score
         health = HealthCalculator.calculate(
             localized_count=len(self.localized_usages),
@@ -144,6 +148,7 @@ class LocalizationAnalyzer:
             dead_keys=self.dead_keys,
             missing_keys=dict(self.missing_keys),
             dynamic_keys=dict(self.dynamic_keys),
+            missing_dynamic_keys=missing_dynamic_keys,
             duplicates=dict(self.duplicates),
             component_stats=dict(self.component_stats),
             file_stats=dict(self.file_stats),
@@ -369,6 +374,67 @@ class LocalizationAnalyzer:
 
         if verbose:
             print(f"   {Colors.success('✓')} Found {len(self.duplicates)} duplicate strings")
+
+    def _analyze_dynamic_key_patterns(self, verbose: bool = True) -> Dict[str, Dict]:
+        r"""
+        Dinamik key pattern'lerini analiz et ve enum-based eksik key'leri bul.
+
+        Bu metod:
+        1. Swift enum tanımlarını keşfeder
+        2. "prefix.\(variable)".localized pattern'lerini bulur
+        3. Her pattern için enum case'lerine göre beklenen key'leri hesaplar
+        4. .strings dosyasında eksik olan key'leri raporlar
+
+        Returns:
+            Dict: {pattern -> {enum, expected_keys, existing_keys, missing_keys}}
+        """
+        if verbose:
+            print(f"\n🔄 Analyzing dynamic key patterns...")
+
+        try:
+            from ..features.dynamic_key_analyzer import DynamicKeyAnalyzer
+
+            # Mevcut key'leri al
+            existing_keys = set(self.file_manager.keys.keys())
+
+            # DynamicKeyAnalyzer oluştur
+            analyzer = DynamicKeyAnalyzer(self.source_dir, existing_keys)
+
+            # Analiz çalıştır
+            results = analyzer.analyze()
+
+            # Sonuçları dict formatına çevir
+            missing_dynamic = {}
+            total_missing = 0
+
+            for result in results:
+                if result.missing_keys:
+                    pattern_key = result.pattern.pattern
+                    missing_dynamic[pattern_key] = {
+                        'file': result.pattern.file_path,
+                        'line': result.pattern.line_number,
+                        'enum': result.enum_name,
+                        'prefix': result.pattern.prefix,
+                        'suffix': result.pattern.suffix,
+                        'expected_keys': result.expected_keys,
+                        'existing_keys': result.existing_keys,
+                        'missing_keys': result.missing_keys,
+                    }
+                    total_missing += len(result.missing_keys)
+
+            if verbose:
+                if missing_dynamic:
+                    print(f"   {Colors.warning('⚠')} Found {total_missing} missing dynamic keys "
+                          f"in {len(missing_dynamic)} patterns")
+                else:
+                    print(f"   {Colors.success('✓')} No missing dynamic keys found")
+
+            return missing_dynamic
+
+        except Exception as e:
+            if verbose:
+                print(f"   {Colors.error('✗')} Dynamic key analysis failed: {e}")
+            return {}
 
     def _print_summary(self, health: HealthScore):
         """Print analysis summary."""

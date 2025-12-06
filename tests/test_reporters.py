@@ -24,6 +24,7 @@ class MockAnalysisResult:
     dead_keys: Set[str] = field(default_factory=set)
     missing_keys: Dict[str, List[str]] = field(default_factory=dict)
     dynamic_keys: Dict[str, List[str]] = field(default_factory=dict)
+    missing_dynamic_keys: Dict[str, Dict] = field(default_factory=dict)
     duplicates: Dict[str, List[HardcodedString]] = field(default_factory=dict)
     component_stats: Dict[str, Dict] = field(default_factory=dict)
     file_stats: Dict[str, Dict] = field(default_factory=dict)
