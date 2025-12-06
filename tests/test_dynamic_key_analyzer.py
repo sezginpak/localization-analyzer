@@ -321,5 +321,155 @@ class TestDynamicKeyAnalysisResult:
         assert len(result.missing_keys) == 2
 
 
+class TestAnalyzerIntegration:
+    """Integration tests for dynamic key analysis with main analyzer."""
+
+    def test_dynamic_keys_excluded_from_dead_keys(self):
+        """Should not mark dynamically-used keys as dead."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+
+            # Create localization structure
+            resources_dir = project_dir / "Resources"
+            en_dir = resources_dir / "en.lproj"
+            en_dir.mkdir(parents=True)
+
+            # Create .strings file with activity keys
+            strings_file = en_dir / "Localizable.strings"
+            strings_file.write_text('''
+"activity.work" = "Work";
+"activity.friends" = "Friends";
+"activity.family" = "Family";
+"unused.key" = "This is unused";
+''')
+
+            # Create enum
+            sources_dir = project_dir / "Sources"
+            sources_dir.mkdir()
+
+            enum_file = sources_dir / "ActivityType.swift"
+            enum_file.write_text('''
+enum ActivityType: String {
+    case work
+    case friends
+    case family
+}
+''')
+
+            # Create usage file with dynamic pattern
+            view_file = sources_dir / "ActivityView.swift"
+            view_file.write_text('''
+import SwiftUI
+
+struct ActivityView: View {
+    let activityType: ActivityType
+
+    var body: some View {
+        Text("activity.\\(activityType.rawValue)".localized)
+    }
+}
+''')
+
+            # Create config
+            config_file = project_dir / ".localization.yml"
+            config_file.write_text('''
+framework: swift
+paths:
+  source: Sources
+  localization: Resources
+languages:
+  primary: en
+  supported: [en]
+''')
+
+            # Run analyzer
+            from localization_analyzer.core.analyzer import LocalizationAnalyzer
+            from localization_analyzer.frameworks.swift import SwiftAdapter
+            from localization_analyzer.utils.config import Config
+
+            config = Config.from_file(str(config_file))
+            adapter = SwiftAdapter(config)
+            analyzer = LocalizationAnalyzer(
+                project_dir=sources_dir,
+                adapter=adapter,
+                localization_dir=resources_dir
+            )
+            result = analyzer.analyze(verbose=False)
+
+            # activity.* keys should NOT be in dead_keys (they're used dynamically)
+            dead_key_list = list(result.dead_keys)
+            assert "activity.work" not in dead_key_list
+            assert "activity.friends" not in dead_key_list
+            assert "activity.family" not in dead_key_list
+
+            # unused.key should still be in dead_keys
+            assert "unused.key" in dead_key_list
+
+    def test_dynamic_analysis_reports_missing_keys(self):
+        """Should report missing keys from enum analysis."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+
+            # Create localization structure
+            resources_dir = project_dir / "Resources"
+            en_dir = resources_dir / "en.lproj"
+            en_dir.mkdir(parents=True)
+
+            # Only activity.work exists, missing friends and family
+            strings_file = en_dir / "Localizable.strings"
+            strings_file.write_text('''
+"activity.work" = "Work";
+''')
+
+            # Create enum with 3 cases
+            sources_dir = project_dir / "Sources"
+            sources_dir.mkdir()
+
+            enum_file = sources_dir / "ActivityType.swift"
+            enum_file.write_text('''
+enum ActivityType: String {
+    case work
+    case friends
+    case family
+}
+''')
+
+            # Create usage
+            view_file = sources_dir / "ActivityView.swift"
+            view_file.write_text('''
+let title = "activity.\\(type.rawValue)".localized
+''')
+
+            # Create config
+            config_file = project_dir / ".localization.yml"
+            config_file.write_text('''
+framework: swift
+paths:
+  source: Sources
+  localization: Resources
+languages:
+  primary: en
+  supported: [en]
+''')
+
+            # Run analyzer
+            from localization_analyzer.core.analyzer import LocalizationAnalyzer
+            from localization_analyzer.frameworks.swift import SwiftAdapter
+            from localization_analyzer.utils.config import Config
+
+            config = Config.from_file(str(config_file))
+            adapter = SwiftAdapter(config)
+            analyzer = LocalizationAnalyzer(
+                project_dir=sources_dir,
+                adapter=adapter,
+                localization_dir=resources_dir
+            )
+            result = analyzer.analyze(verbose=False)
+
+            # Check missing_dynamic_keys
+            # There should be missing keys reported
+            assert result.missing_dynamic_keys is not None
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

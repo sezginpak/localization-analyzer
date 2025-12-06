@@ -249,10 +249,14 @@ class DynamicKeyAnalyzer:
             ))
 
     def _analyze_patterns(self):
-        """Her pattern için eksik key'leri analiz et."""
+        """Her pattern için key'leri analiz et.
+
+        Not: Tüm sonuçlar eklenir (missing olsun olmasın) çünkü
+        dead key tespiti için expected_keys bilgisi gereklidir.
+        """
         for pattern in self.dynamic_patterns:
             result = self._analyze_single_pattern(pattern)
-            if result and result.missing_keys:
+            if result:
                 self.results.append(result)
 
     def _analyze_single_pattern(

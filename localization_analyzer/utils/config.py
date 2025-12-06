@@ -105,7 +105,18 @@ class Config:
 
     @classmethod
     def from_file(cls, config_path: Optional[Path] = None) -> 'Config':
-        """Load configuration from YAML file."""
+        """
+        Load configuration from YAML file.
+
+        Args:
+            config_path: YAML config dosyası yolu. None ise .localization.yml aranır.
+
+        Returns:
+            Config nesnesi
+
+        Raises:
+            ConfigValidationError: YAML parse hatası veya dosya okuma hatası
+        """
         if config_path is None:
             # Look for .localization.yml in current directory
             config_path = Path.cwd() / '.localization.yml'
@@ -114,8 +125,16 @@ class Config:
                 # Return default config
                 return cls()
 
-        with open(config_path, 'r', encoding='utf-8') as f:
-            data = yaml.safe_load(f) or {}
+        try:
+            # utf-8-sig: BOM karakterlerini otomatik handle eder
+            with open(config_path, 'r', encoding='utf-8-sig') as f:
+                data = yaml.safe_load(f) or {}
+        except yaml.YAMLError as e:
+            raise ConfigValidationError([f"YAML parse hatası: {e}"])
+        except (IOError, OSError) as e:
+            raise ConfigValidationError([f"Config dosyası okunamadı: {e}"])
+        except UnicodeDecodeError as e:
+            raise ConfigValidationError([f"Config dosyası encoding hatası (UTF-8 bekleniyor): {e}"])
 
         return cls(
             project=ProjectConfig(**data.get('project', {})),

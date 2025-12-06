@@ -299,14 +299,17 @@ class LocalizationFileManager:
         for lang_code, file_paths in self.languages.items():
             for file_path in file_paths:
                 try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
+                    # utf-8-sig: BOM karakterlerini otomatik handle eder
+                    with open(file_path, 'r', encoding='utf-8-sig') as f:
                         content = f.read()
 
                     is_valid, error_msg = validate_strings_file_format(content)
                     if not is_valid:
                         errors[lang_code].append(f"{file_path.name}: {error_msg}")
-                except Exception as e:
-                    errors[lang_code].append(f"{file_path.name}: {str(e)}")
+                except UnicodeDecodeError as e:
+                    errors[lang_code].append(f"{file_path.name}: Encoding hatası - {e}")
+                except (IOError, OSError) as e:
+                    errors[lang_code].append(f"{file_path.name}: Dosya okuma hatası - {e}")
 
         return dict(errors)
 

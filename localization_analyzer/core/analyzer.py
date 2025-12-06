@@ -6,6 +6,7 @@ from typing import List, Set, Dict, Optional
 from collections import defaultdict, Counter
 from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 
 from ..frameworks.base import BaseAdapter, HardcodedString, LocalizedUsage
 from ..utils.colors import Colors
@@ -95,6 +96,9 @@ class LocalizationAnalyzer:
         self.file_stats = defaultdict(lambda: {'total': 0, 'localized': 0, 'hardcoded': 0})
         self.folder_stats = defaultdict(lambda: {'total': 0, 'localized': 0, 'hardcoded': 0})
 
+        # Thread-safety için lock (multi-threaded analiz sırasında shared state koruma)
+        self._lock = Lock()
+
     def analyze(self, verbose: bool = True) -> AnalysisResult:
         """
         Run complete analysis.
@@ -119,14 +123,15 @@ class LocalizationAnalyzer:
         # Analyze files
         self._analyze_all_files(verbose)
 
-        # Find dead keys
-        self._find_dead_keys(verbose)
+        # Analyze dynamic key patterns for missing enum-based keys
+        # (Bu önce yapılmalı ki dinamik key'ler dead key hesabından çıkarılabilsin)
+        missing_dynamic_keys, all_dynamic_keys = self._analyze_dynamic_key_patterns(verbose)
+
+        # Find dead keys (dinamik key'leri hariç tut)
+        self._find_dead_keys(verbose, all_dynamic_keys)
 
         # Analyze duplicates
         self._analyze_duplicates(verbose)
-
-        # Analyze dynamic key patterns for missing enum-based keys
-        missing_dynamic_keys = self._analyze_dynamic_key_patterns(verbose)
 
         # Calculate health score
         health = HealthCalculator.calculate(
@@ -267,7 +272,7 @@ class LocalizationAnalyzer:
             print(f"   {Colors.success('✓')} Analysis complete")
 
     def _analyze_file(self, file_path: Path):
-        """Analyze a single file."""
+        """Analyze a single file (thread-safe)."""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -278,36 +283,47 @@ class LocalizationAnalyzer:
         relative_path = file_path.relative_to(self.project_dir)
         folder = str(relative_path.parent)
 
+        # Thread-local sonuçları topla
+        local_used_keys: Set[str] = set()
+        local_localized_usages: List[LocalizedUsage] = []
+        local_dynamic_keys: Dict[str, List[str]] = defaultdict(list)
+        local_missing_keys: Dict[str, List[str]] = defaultdict(list)
+        local_component_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {'localized': 0, 'hardcoded': 0})
+        local_file_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {'localized': 0, 'hardcoded': 0})
+        local_folder_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {'localized': 0, 'hardcoded': 0})
+        local_hardcoded_strings: List[HardcodedString] = []
+        local_duplicates: Dict[str, List[HardcodedString]] = defaultdict(list)
+
         # Find localized usages
         for pattern in self.adapter.localized_patterns:
             for match in re.finditer(pattern.pattern, content):
                 key = match.group(1)
                 line_num = content[:match.start()].count('\n') + 1
 
-                self.used_keys.add(key)
-                self.localized_usages.append(LocalizedUsage(
+                local_used_keys.add(key)
+                local_localized_usages.append(LocalizedUsage(
                     file=str(relative_path),
                     line=line_num,
                     key=key,
                     component=pattern.component_type,
                 ))
 
-                self.component_stats[pattern.component_type]['localized'] += 1
-                self.file_stats[str(relative_path)]['localized'] += 1
-                self.folder_stats[folder]['localized'] += 1
+                local_component_stats[pattern.component_type]['localized'] += 1
+                local_file_stats[str(relative_path)]['localized'] += 1
+                local_folder_stats[folder]['localized'] += 1
 
                 # Check if key exists (skip dynamic keys with valid base patterns)
                 if not self.file_manager.key_exists(key):
                     # Dinamik key mi kontrol et
                     if self._is_dynamic_key(key):
                         # Dinamik key'i ayrı kategoride takip et (bilgi amaçlı)
-                        self.dynamic_keys[key].append(str(relative_path))
+                        local_dynamic_keys[key].append(str(relative_path))
                         # Base pattern'e sahip key'ler var mı?
                         if self._has_base_pattern_keys(key):
                             # Dinamik key, base pattern mevcut - eksik değil
                             continue
                     # Gerçekten eksik key
-                    self.missing_keys[key].append(str(relative_path))
+                    local_missing_keys[key].append(str(relative_path))
 
         # Find hardcoded strings
         for pattern in self.adapter.hardcoded_patterns:
@@ -343,22 +359,65 @@ class LocalizationAnalyzer:
                     suggested_key=suggested_key,
                 )
 
-                self.hardcoded_strings.append(hardcoded)
-                self.duplicates[text].append(hardcoded)
+                local_hardcoded_strings.append(hardcoded)
+                local_duplicates[text].append(hardcoded)
 
-                self.component_stats[pattern.component_type]['hardcoded'] += 1
-                self.file_stats[str(relative_path)]['hardcoded'] += 1
-                self.folder_stats[folder]['hardcoded'] += 1
+                local_component_stats[pattern.component_type]['hardcoded'] += 1
+                local_file_stats[str(relative_path)]['hardcoded'] += 1
+                local_folder_stats[folder]['hardcoded'] += 1
 
-    def _find_dead_keys(self, verbose: bool = True):
-        """Find keys that exist but are not used."""
+        # Thread-safe: Lock ile shared state'e yaz
+        with self._lock:
+            self.used_keys.update(local_used_keys)
+            self.localized_usages.extend(local_localized_usages)
+            self.hardcoded_strings.extend(local_hardcoded_strings)
+
+            for key, files in local_dynamic_keys.items():
+                self.dynamic_keys[key].extend(files)
+
+            for key, files in local_missing_keys.items():
+                self.missing_keys[key].extend(files)
+
+            for text, locations in local_duplicates.items():
+                self.duplicates[text].extend(locations)
+
+            for comp, stats in local_component_stats.items():
+                self.component_stats[comp]['localized'] += stats['localized']
+                self.component_stats[comp]['hardcoded'] += stats['hardcoded']
+
+            for f, stats in local_file_stats.items():
+                self.file_stats[f]['localized'] += stats['localized']
+                self.file_stats[f]['hardcoded'] += stats['hardcoded']
+
+            for folder_name, stats in local_folder_stats.items():
+                self.folder_stats[folder_name]['localized'] += stats['localized']
+                self.folder_stats[folder_name]['hardcoded'] += stats['hardcoded']
+
+    def _find_dead_keys(
+        self, verbose: bool = True, dynamically_used_keys: set = None
+    ):
+        """Find keys that exist but are not used.
+
+        Args:
+            verbose: Detaylı çıktı göster
+            dynamically_used_keys: Dinamik olarak kullanılan key'ler - dead sayılmaz
+        """
         if verbose:
             print(f"\n🔎 Finding dead keys...")
 
         all_keys = set(self.file_manager.keys.keys())
-        self.dead_keys = all_keys - self.used_keys
+
+        # Dinamik key'ler yoksa boş set kullan
+        if dynamically_used_keys is None:
+            dynamically_used_keys = set()
+
+        # Dead keys = Tüm key'ler - Kullanılanlar - Dinamik kullanılanlar
+        self.dead_keys = all_keys - self.used_keys - dynamically_used_keys
 
         if verbose:
+            if dynamically_used_keys:
+                print(f"   {Colors.info('ℹ')} {len(dynamically_used_keys)} keys excluded "
+                      f"(used dynamically)")
             print(f"   {Colors.success('✓')} Found {len(self.dead_keys)} dead keys")
 
     def _analyze_duplicates(self, verbose: bool = True):
@@ -375,7 +434,9 @@ class LocalizationAnalyzer:
         if verbose:
             print(f"   {Colors.success('✓')} Found {len(self.duplicates)} duplicate strings")
 
-    def _analyze_dynamic_key_patterns(self, verbose: bool = True) -> Dict[str, Dict]:
+    def _analyze_dynamic_key_patterns(
+        self, verbose: bool = True
+    ) -> tuple[Dict[str, Dict], set]:
         r"""
         Dinamik key pattern'lerini analiz et ve enum-based eksik key'leri bul.
 
@@ -386,7 +447,10 @@ class LocalizationAnalyzer:
         4. .strings dosyasında eksik olan key'leri raporlar
 
         Returns:
-            Dict: {pattern -> {enum, expected_keys, existing_keys, missing_keys}}
+            tuple: (
+                Dict: {pattern -> {enum, expected_keys, existing_keys, missing_keys}},
+                set: Tüm dinamik olarak kullanılan key'ler (dead key hesabı için)
+            )
         """
         if verbose:
             print(f"\n🔄 Analyzing dynamic key patterns...")
@@ -398,16 +462,20 @@ class LocalizationAnalyzer:
             existing_keys = set(self.file_manager.keys.keys())
 
             # DynamicKeyAnalyzer oluştur
-            analyzer = DynamicKeyAnalyzer(self.source_dir, existing_keys)
+            analyzer = DynamicKeyAnalyzer(self.project_dir, existing_keys)
 
             # Analiz çalıştır
             results = analyzer.analyze()
 
             # Sonuçları dict formatına çevir
             missing_dynamic = {}
+            all_dynamic_keys = set()  # Tüm dinamik key'ler (dead key hesabından çıkarılacak)
             total_missing = 0
 
             for result in results:
+                # Tüm expected_keys dinamik kullanım gösterir
+                all_dynamic_keys.update(result.expected_keys)
+
                 if result.missing_keys:
                     pattern_key = result.pattern.pattern
                     missing_dynamic[pattern_key] = {
@@ -428,13 +496,15 @@ class LocalizationAnalyzer:
                           f"in {len(missing_dynamic)} patterns")
                 else:
                     print(f"   {Colors.success('✓')} No missing dynamic keys found")
+                if all_dynamic_keys:
+                    print(f"   {Colors.info('ℹ')} {len(all_dynamic_keys)} keys used dynamically")
 
-            return missing_dynamic
+            return missing_dynamic, all_dynamic_keys
 
         except Exception as e:
             if verbose:
                 print(f"   {Colors.error('✗')} Dynamic key analysis failed: {e}")
-            return {}
+            return {}, set()
 
     def _print_summary(self, health: HealthScore):
         """Print analysis summary."""

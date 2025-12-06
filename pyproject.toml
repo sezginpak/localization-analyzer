@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "localization-analyzer"
-version = "1.16.0"
+version = "1.17.0"
 description = "Professional localization analyzer for Swift/iOS projects with auto-translation"
 readme = "README.md"
 requires-python = ">=3.8"

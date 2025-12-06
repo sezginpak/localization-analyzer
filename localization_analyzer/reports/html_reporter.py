@@ -133,10 +133,13 @@ class HTMLReporter:
     def _generate_html(data: dict, title: str) -> str:
         """Tam HTML içeriğini oluşturur."""
         # JSON veriyi JavaScript için hazırla
-        # XSS koruması: </script> ve <!-- gibi HTML etiketlerini escape et
+        # XSS koruması: Tehlikeli HTML/JS pattern'lerini escape et
         json_data = json.dumps(data, ensure_ascii=False, indent=2)
         json_data = json_data.replace('</', '<\\/')  # </script> saldırısını önle
         json_data = json_data.replace('<!--', '<\\!--')  # HTML comment injection önle
+        json_data = json_data.replace('-->', '--\\>')  # Comment kapanışını önle
+        json_data = json_data.replace('<script', '<\\script')  # Script tag injection önle
+        json_data = json_data.replace('<Script', '<\\Script')  # Case-insensitive koruma
 
         return f'''<!DOCTYPE html>
 <html lang="tr">

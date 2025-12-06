@@ -1,10 +1,32 @@
 """Version information for localization-analyzer."""
 
-__version__ = "1.16.0"
+__version__ = "1.17.0"
 __author__ = "Sezgin Paksoy"
 __description__ = "Professional localization analyzer for multi-platform projects"
 
 # Changelog:
+# 1.17.0 - Security Fixes & Improvements
+#        - SECURITY: Fixed SSL certificate bypass vulnerability (translator.py)
+#        - SECURITY: Enhanced XSS protection in HTML reporter
+#        - Fixed: Thread-safety with Lock mechanism in analyzer
+#        - Added: BOM character support (utf-8-sig encoding)
+#        - Added: YAML parse error handling in config
+#        - Added: CLI test suite (47 tests, 79% coverage)
+#        - Fixed: setup.py synchronized with pyproject.toml
+#        - Fixed: Missing exports in features/__init__.py
+#        - Fixed: Unused imports cleaned up
+#        - Improved: Exception handling in file operations
+#        - Total tests: 447
+#
+# 1.16.1 - Dynamic Key Analysis Bug Fixes
+#        - Fixed: self.source_dir undefined error (now uses self.project_dir)
+#        - Fixed: Dynamic keys now properly excluded from dead key detection
+#        - Added: "X keys used dynamically" info message in verbose output
+#        - Added: "X keys excluded (used dynamically)" in dead key detection
+#        - Improved: _analyze_patterns now returns all results (not just missing)
+#        - Added: 2 new integration tests for dead key exclusion
+#        - Total tests: 400
+#
 # 1.16.0 - Dynamic Key Analysis (Enum-based Missing Key Detection)
 #        - New DynamicKeyAnalyzer class for enum-based key validation
 #        - Discovers Swift enum definitions from source code

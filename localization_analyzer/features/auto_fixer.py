@@ -71,10 +71,15 @@ class AutoFixer:
 
         # Read source file
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            # utf-8-sig: BOM karakterlerini otomatik handle eder
+            with open(file_path, 'r', encoding='utf-8-sig') as f:
                 lines = f.readlines()
-        except Exception as e:
-            print(f"  {Colors.error('❌')} Failed to read {file_path}: {e}")
+        except UnicodeDecodeError as e:
+            print(f"  {Colors.error('❌')} Encoding hatası {file_path}: {e}")
+            self.fixes_failed += 1
+            return False
+        except (IOError, OSError) as e:
+            print(f"  {Colors.error('❌')} Dosya okuma hatası {file_path}: {e}")
             self.fixes_failed += 1
             return False
 

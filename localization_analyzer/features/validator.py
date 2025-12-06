@@ -2,7 +2,7 @@
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from collections import defaultdict
 
@@ -104,14 +104,23 @@ class LocalizationValidator:
             return result
 
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            # utf-8-sig: BOM karakterlerini otomatik handle eder
+            with open(file_path, 'r', encoding='utf-8-sig') as f:
                 content = f.read()
                 lines = content.split('\n')
-        except Exception as e:
+        except UnicodeDecodeError as e:
             result.add_issue(ValidationIssue(
                 severity='error',
                 code='E000',
-                message=f'Cannot read file: {e}',
+                message=f'Encoding hatası (UTF-8 bekleniyor): {e}',
+                file=str(file_path)
+            ))
+            return result
+        except (IOError, OSError) as e:
+            result.add_issue(ValidationIssue(
+                severity='error',
+                code='E000',
+                message=f'Dosya okuma hatası: {e}',
                 file=str(file_path)
             ))
             return result

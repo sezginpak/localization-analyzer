@@ -9,14 +9,14 @@ from typing import Dict, Optional, List
 from pathlib import Path
 
 # SSL context for secure connections
+# GÜVENLİK: SSL doğrulaması asla devre dışı bırakılmamalı (MITM riski)
 try:
     import certifi
     SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 except ImportError:
-    # Fallback: create unverified context if certifi not available
+    # Fallback: sistem sertifikalarını kullan (SSL doğrulaması aktif kalır)
     SSL_CONTEXT = ssl.create_default_context()
-    SSL_CONTEXT.check_hostname = False
-    SSL_CONTEXT.verify_mode = ssl.CERT_NONE
+    # NOT: check_hostname ve verify_mode varsayılan güvenli değerlerde kalır
 
 from ..utils.colors import Colors
 

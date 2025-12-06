@@ -718,7 +718,8 @@ class SwiftAdapter(BaseAdapter):
         keys = {}
 
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            # utf-8-sig: Windows'ta oluşturulan dosyalardaki BOM karakterini handle eder
+            with open(file_path, 'r', encoding='utf-8-sig') as f:
                 content = f.read()
                 # Pattern supports escaped characters: \" \\ \n etc.
                 # (?:[^"\\]|\\.)* matches: non-quote/non-backslash chars OR backslash+any char
@@ -728,8 +729,10 @@ class SwiftAdapter(BaseAdapter):
                 for match in matches:
                     key, value = match.groups()
                     keys[key] = value
-        except Exception as e:
-            print(f"Error parsing {file_path}: {e}")
+        except UnicodeDecodeError as e:
+            print(f"Encoding error in {file_path}: {e}")
+        except (IOError, OSError) as e:
+            print(f"Error reading {file_path}: {e}")
 
         return keys
 
